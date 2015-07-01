@@ -1,0 +1,89 @@
+Enter file contents here
+
+Code to add appropriate libraries in Excel files
+
+Sheet 1 Code
+
+Option Explicit
+
+Sub ListReferences()
+    Dim BoolExists As Boolean, tRow As Integer, tCol As Integer, WS As Worksheet
+    
+    Set WS = ThisWorkbook.Worksheets("VbaRef")
+    
+    WS.Cells.Clear
+    tRow = 1: tCol = 1
+    WS.Cells(tRow, tCol).Value = "Name"
+    WS.Cells(tRow, tCol + 1).Value = "Description"
+    WS.Cells(tRow, tCol + 2).Value = "GUID"
+    WS.Cells(tRow, tCol + 3).Value = "Major"
+    WS.Cells(tRow, tCol + 4).Value = "Minor"
+    WS.Cells(tRow, tCol + 5).Value = "FullPath"
+    
+    For tRow = 2 To ThisWorkbook.VBProject.References.Count
+        WS.Cells(tRow, tCol).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).Name
+        WS.Cells(tRow, tCol + 1).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).Description
+        WS.Cells(tRow, tCol + 2).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).GUID
+        WS.Cells(tRow, tCol + 3).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).major
+        WS.Cells(tRow, tCol + 4).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).minor
+        WS.Cells(tRow, tCol + 5).Value = ThisWorkbook.VBProject.References.Item(tRow - 1).fullpath
+    Next
+
+    
+End Sub
+
+Private Sub CommandButton1_Click()
+    Call ListReferences
+End Sub
+
+
+
+
+
+Module 1 Code
+
+Option Explicit
+
+Function AddReference(RefName As String, FilePath As String) As String
+    'Dim VBAEditor As VBIDE.VBE
+    
+    'Code based on http://www.ozgrid.com/forum/showthread.php?t=22483
+    Dim i As Integer
+
+    On Error GoTo GenErrMsg
+
+    '~~> Check if Reference is already added
+    For i = 1 To ThisWorkbook.VBProject.References.Count
+        If ThisWorkbook.VBProject.References.Item(i).Name = RefName Then GoTo Done
+    Next i
+
+    ThisWorkbook.VBProject.References.AddFromFile FilePath
+    GoTo Done
+    
+GenErrMsg:
+    AddReference = Err.Description
+Done:
+End Function
+
+Sub EnableReferences()
+    Dim WS As Worksheet, tRow As Integer, tCol As Integer
+    Dim rName As String, FP As String, tStr As String
+    
+    Set WS = ThisWorkbook.Worksheets("VbaRef")
+    
+    On Error GoTo err1
+    tRow = 2: tCol = 1
+    Do
+        tStr = ""
+        rName = WS.Cells(tRow, tCol).Text
+        FP = WS.Cells(tRow, tCol + 5).Text
+        If rName = "" Then Exit Do
+        tStr = AddReference(rName, FP)
+        If tStr <> "" Then MsgBox tStr
+        tRow = tRow + 1
+    Loop
+    Exit Sub
+err1:
+    MsgBox Err.Description
+End Sub
+

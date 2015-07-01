@@ -319,7 +319,17 @@ Function GetColLetter(ColIndex As Integer) As String
     GetColLetter = Left(Cells(1, ColIndex).Address(1, 0), InStr(1, Cells(1, ColIndex).Address(1, 0), "$") - 1)
 End Function
 
-
+Public Function GetFolderName(strPath As String) As String
+    Dim i As Integer, strLen As Integer
+    
+    strLen = Len(strPath)
+    
+    For i = strLen - 1 To 0 Step -1
+        If Mid(strPath, i, 1) = "\" Then Exit For
+        GetFolderName = Mid(strPath, i, 1) & GetFolderName
+    Next i
+    
+End Function
 
 
 

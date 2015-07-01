@@ -44,3 +44,283 @@ Sub PasswordBreaker()
 
 
 End Sub
+
+Sub Speak()
+    Dim speech As String
+    speech = InputBox("What do you want said?", "Choose Speech")
+    Application.speech.Speak (speech)
+
+End Sub
+
+Function GetLastRow(Optional WkSht As String, Optional StartRow As Integer, Optional Col As Integer, Optional EndRow As Integer) As Integer
+    Dim row As Integer, tStr As String
+    
+    If WkSht = "" Then WkSht = "Calc"
+    If StartRow = 0 Then StartRow = 6
+    GetLastRow = StartRow
+    If Col = 0 Then Col = 4
+    If EndRow = 0 Then EndRow = 500
+    If EndRow > 32000 Then EndRow = 32000
+    
+    For row = StartRow To EndRow
+       tStr = ThisWorkbook.Worksheets(WkSht).Cells(row, Col).Text
+       If tStr <> "" Then GetLastRow = row
+    Next row
+End Function
+
+Function GetRow(FindWhat As String, WS As String, Srow As Integer, LUCol As Integer) As Integer
+    If FindWhat = "" Or WS = "" Or LUCol < 1 Then Exit Function
+    If Srow < 1 Then Srow = 1
+    Dim EC As Integer, tStr As String
+    GetRow = Srow
+    Do While EC < 5
+        tStr = ThisWorkbook.Worksheets(WS).Cells(GetRow, LUCol).Text
+        If tStr = "" Then EC = EC + 1
+        If tStr <> "" Then EC = 0
+        If tStr = FindWhat Then Exit Function
+        GetRow = GetRow + 1
+    Loop
+    GetRow = 0
+End Function
+
+Function Find(FindText As String, WithinText As String, StartNum As Integer) As Integer
+    Dim FTLen As Integer, WTLen As Integer, tTxt As String
+    FTLen = Len(FindText)
+    WTLen = Len(WithinText)
+    If FTLen > WTLen Then Exit Function
+    If StartNum + FTLen > WTLen Then Exit Function
+    For Find = StartNum To StartNum + WTLen
+        tTxt = Mid(WithinText, Find, FTLen)
+        If tTxt = FindText Then Exit Function
+    Next Find
+    Find = 0
+End Function
+
+Function TableLookUp(FindWhat As String, InWorkSht As String, LookUpCol As Integer, ReturnCol As Integer, StartRow As Integer, Optional EndRow As Integer) As String
+    If FindWhat = "" Or InWorkSht = "" Or LookUpCol < 1 Or ReturnCol < 1 Then Exit Function
+    Dim row As Integer, tStr As String
+    If EndRow > StartRow Then 'Endrow condition is used
+        For row = StartRow To EndRow
+            tStr = ThisWorkbook.Worksheets(InWorkSht).Cells(row, LookUpCol).Text
+            If tStr = FindWhat Then GoTo foundFW
+        Next row
+    Else
+        row = StartRow
+        tStr = "Start"
+        Do While tStr <> ""
+            tStr = ThisWorkbook.Worksheets(InWorkSht).Cells(row, LookUpCol).Text
+            If tStr = FindWhat Then GoTo foundFW
+            row = row + 1
+        Loop
+    End If
+    TableLookUp = "N/A"
+    Exit Function
+foundFW:
+    TableLookUp = ThisWorkbook.Worksheets(InWorkSht).Cells(row, ReturnCol).Text
+End Function
+
+Function ACos(X As Double) As Double
+    ACos = Atn(-X / Sqr(-X * X + 1)) + 2 * Atn(1)
+End Function
+
+Function ArcCos(X As Double) As Double
+    If X = 1 Then
+        ArcCos = 0
+    ElseIf X = -1 Then
+        ArcCos = -PI()
+    Else
+        ArcCos = Atn(X / Sqr(-X * X + 1)) + PI() / 2
+    End If
+End Function
+
+Function ArcCosec(X As Double) As Double
+    ArcCosec = Atn(X / Sqr(X * X - 1)) + (Sgn(X) - 1) * PI() / 2
+End Function
+
+Function ArcCotan(X As Double) As Double
+    ArcCotan = Atn(X) + PI() / 2
+End Function
+
+Function ArcSec(X As Double) As Double
+    ArcSec = Atn(X / Sqr(X * X - 1)) + Sgn(Sgn(X) - 1) * PI() / 2
+End Function
+
+Function ArcSin(X As Double) As Double
+    If X - X > 2 Then Exit Function
+    If X = 1 Then
+        ArcSin = PI() / 2
+    ElseIf X = -1 Then
+        ArcSin = -PI() / 2
+    Else
+        ArcSin = Atn(X / Sqr(-X * X + 1))
+    End If
+End Function
+
+Function ATan2(X As Double, Y As Double) As Double
+    If X = 0 Then
+        If Y = 0 Then
+            ATan2 = 1 / 0
+        ElseIf Y > 0 Then
+            ATan2 = PI() / 2
+        Else
+            ATan2 = -PI() / 2
+        End If
+    ElseIf X > 0 Then
+        If Y = 0 Then
+            ATan2 = 0
+        Else
+            ATan2 = Atn(Y / X)
+        End If
+    Else
+        If Y = 0 Then
+            ATan2 = PI()
+        Else
+            ATan2 = (PI() - Atn(Abs(Y) / Abs(X))) * Sgn(Y)
+        End If
+    End If
+End Function
+
+Function Cosec(X As Double) As Double
+    Cosec = 1 / Sin(X)
+End Function
+
+Function Cotan(X As Double) As Double
+    Cotan = 1 / Tan(X)
+End Function
+
+Function ConvDegtoRad(X As Double) As Double
+    ConvDegtoRad = X / 180 * PI()
+End Function
+
+Function ArcCosH(X As Double) As Double
+    ArcCosH = Log(X + Sqr(X * X - 1))
+End Function
+
+Function ArcCosecH(X As Double) As Double
+    ArcCosecH = Log((Sgn(X) * Sqr(X * X + 1) + 1) / X)
+End Function
+
+Function ArcCotanH(X As Double) As Double
+    ArcCotanH = Log((X + 1) / (X - 1)) / 2
+End Function
+
+Function ArcSecH(X As Double) As Double
+    ArcSecH = Log((Sqr(-X * X + 1) + 1) / X)
+End Function
+
+Function ArcSinH(X As Double) As Double
+    ArcSinH = Log(X + Sqr(X * X + 1))
+End Function
+
+Function ArcTanH(X As Double) As Double
+    ArcTanH = Log((1 + X) / (1 - X)) / 2
+End Function
+
+Function CosH(X As Double) As Double
+    CosH = (Exp(X) + Exp(-X)) / 2
+End Function
+
+Function CosecH(X As Double) As Double
+    CosecH = 2 / (Exp(X) - Exp(-X))
+End Function
+
+Function CotanH(X As Double) As Double
+    CotanH = (Exp(X) + Exp(-X)) / (Exp(X) - Exp(-X))
+End Function
+
+Function SecH(X As Double) As Double
+    SecH = 2 / (Exp(X) + Exp(-X))
+End Function
+
+Function HSin(X As Double) As Double
+    HSin = (Exp(X) - Exp(-X)) / 2
+End Function
+
+Function TanH(X As Double) As Double
+    TanH = (Exp(X) - Exp(-X)) / (Exp(X) + Exp(-X))
+End Function
+
+Function PI() As Double
+    PI = Atn(1) * 4
+End Function
+
+Function Rad2Deg(X As Double) As Double
+    Rad2Deg = X / PI() * 180
+End Function
+
+Function Sec(X As Double) As Double
+    Sec = 1# / Cos(X)
+End Function
+
+Function FileList(fldr As String, Optional fltr As String = "*.*") As Variant
+    Dim sTemp As String, sHldr As String
+    If Right$(fldr, 1) <> "\" Then fldr = fldr & "\"
+    sTemp = Dir(fldr & fltr)
+    If sTemp = "" Then
+        FileList = Split("No files found", "|") 'ensures an array is returned
+        Exit Function
+    End If
+    Do
+        sHldr = Dir
+        If sHldr = "" Then Exit Do
+        sTemp = sTemp & "|" & sHldr
+    Loop
+    FileList = Split(sTemp, "|")
+End Function
+
+Function ValTableLookUp(FindWhat As Double, InWorkSht As String, LookUpCol As Integer, ReturnCol As Integer, StartRow As Integer, Optional EndRow As Integer) As String
+    If FindWhat = 0 Or InWorkSht = "" Or LookUpCol < 1 Or ReturnCol < 1 Then Exit Function
+    Dim row As Integer, tDbl As Double, tStr As String
+    If EndRow > StartRow Then 'Endrow condition is used
+        For row = StartRow To EndRow
+            tDbl = ThisWorkbook.Worksheets(InWorkSht).Cells(row, LookUpCol).Value
+            If tDbl = FindWhat Then GoTo foundFW
+        Next row
+    Else
+        row = StartRow
+        tStr = "Start"
+        Do While tStr <> ""
+            tStr = ThisWorkbook.Worksheets(InWorkSht).Cells(row, LookUpCol).Text
+            tDbl = GetWSVal(InWorkSht, row, LookUpCol)
+            If tDbl = FindWhat Then GoTo foundFW
+            row = row + 1
+        Loop
+    End If
+    ValTableLookUp = -1
+    Exit Function
+foundFW:
+    ValTableLookUp = ThisWorkbook.Worksheets(InWorkSht).Cells(row, ReturnCol).Text
+End Function
+
+Function GetMin(Var1 As Variant, Var2 As Variant) As Double
+    Dim Val1 As Double, Val2 As Double
+    Val1 = Val(Var1)
+    Val2 = Val(Var2)
+    GetMin = Val2
+    If Val1 <= Val2 Then GetMin = Val1
+End Function
+
+Function GetMax(Var1 As Variant, Var2 As Variant) As Double
+    Dim Val1 As Double, Val2 As Double
+    Val1 = Val(Var1)
+    Val2 = Val(Var2)
+    GetMax = Val2
+    If Val1 >= Val2 Then GetMax = Val1
+End Function
+
+Sub CopytoClip(Txt As String)
+    Dim DataObj As New MSForms.DataObject
+    DataObj.SetText Txt
+    DataObj.PutInClipboard
+End Sub
+
+Function GetColLetter(ColIndex As Integer) As String
+    If ColIndex < 1 Then Exit Function
+    GetColLetter = Left(Cells(1, ColIndex).Address(1, 0), InStr(1, Cells(1, ColIndex).Address(1, 0), "$") - 1)
+End Function
+
+
+
+
+
+

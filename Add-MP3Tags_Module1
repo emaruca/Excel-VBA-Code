@@ -1,0 +1,31 @@
+Enter file contents here
+Add to MP# Tags file - Module 1
+
+Module 1 Code
+Option Explicit
+
+Public Function Find(FindText As String, WithinText As String, StartNum As Integer) As Integer
+    Dim FTLen As Integer, WTLen As Integer, tTxt As String
+    FTLen = Len(FindText)
+    WTLen = Len(WithinText)
+    If FTLen > WTLen Then Exit Function
+    If StartNum + FTLen > WTLen Then Exit Function
+    For Find = StartNum To StartNum + WTLen
+        tTxt = Mid(WithinText, Find, FTLen)
+        If tTxt = FindText Then Exit Function
+    Next Find
+    Find = 0
+End Function
+
+Public Function GetFolderName(strPath As String) As String
+    Dim i As Integer, strLen As Integer
+    
+    strLen = Len(strPath)
+    
+    For i = strLen - 1 To 0 Step -1
+        If Mid(strPath, i, 1) = "\" Then Exit For
+        GetFolderName = Mid(strPath, i, 1) & GetFolderName
+    Next i
+    
+End Function
+

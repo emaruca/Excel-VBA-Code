@@ -1,0 +1,66 @@
+Enter file contents here
+
+Code to test connection to BPCS (AKA AS/400 or IBM iSeries)
+
+Sub ADODB2()
+    Application.ScreenUpdating = False
+    Application.StatusBar = True
+    
+    Dim cn As New ADODB.Connection, cProv As String, cSrc As String, ConnStr As String
+    Dim rs As New ADODB.Recordset
+    Dim fld As Object
+    Dim x As Integer, tCol As Integer, maxCol As Integer, foundMS As Boolean
+     
+    cProv = "IBMDA400.DataSource.1"
+    cSrc = "{JuddWire}"
+    ConnStr = "User ID=JUDDREAD;Data Source=JUDDWIRE;Default Collection=BPCSF;Catalog Library List=BPCS;Password=ZRTFPOLO"
+     
+     ' Set up ADO connection object properties. This connection will be read only
+     ' Depending on user's Client Access Settings they may or may not be prompted
+     ' to enter their user name and password to the AS/400
+     
+    With cn
+        cn.Provider = cProv 'IBM Data Access o the AS/400 provider
+        cn.ConnectionString = ConnStr
+        cn.Open 'Open Connection.
+        cn.CursorLocation = adUseServer
+    
+    End With
+     
+    rs.Open ("SELECT * FROM @MSZ"), cn, adOpenStatic, adLockReadOnly
+     
+    Dim stsCnt As Double
+    Dim shtcnt As Integer
+    foundMS = False
+    Let stsCnt = rs.RecordCount
+    maxCol = rs.Fields.Count
+    For tCol = 1 To maxCol
+        Cells(1, tCol).Value = rs.Fields(tCol - 1).Name
+    Next tCol
+    x = 2
+    Do Until rs.EOF
+        shtcnt = shtcnt + 1
+        Application.StatusBar = CStr(shtcnt) & "/" & stsCnt
+        
+        'If x > stsCnt Then Exit Do
+        If rs.Fields("MSZITM") = "M07948" Then
+            For tCol = 1 To maxCol
+                Cells(x, tCol).Value = rs.Fields(tCol - 1)
+            Next tCol
+            x = x + 1
+            foundMS = True
+        Else
+            If foundMS Then Exit Do
+        End If
+        rs.MoveNext
+    Loop
+     
+    rs.Close
+    cn.Close
+     
+    Set rs = Nothing
+    Set cn = Nothing
+     
+    Application.ScreenUpdating = True
+    Application.StatusBar = False
+End Sub

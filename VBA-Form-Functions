@@ -1,0 +1,222 @@
+Enter file contents here
+Global functions for user forms in Excel VBA
+
+Option Explicit
+Sub SpinBtn(UorD As String, ObjtoModify As Object, ObjType As String, ObjMinVal As Double, ObjMaxVal As Double, Optional Inc As Double)
+    Dim OVal As Double
+    If ObjMinVal > ObjMaxVal Then Exit Sub
+    If Inc <= 0 Then Inc = 1 'if no Inc is specified, default to 1
+    On Error GoTo Error
+    OVal = GetObjVal(ObjtoModify, ObjType)
+    If UorD = "U" Then
+        Inc = Abs(Inc)
+    ElseIf UorD = "D" Then
+        Inc = -1 * Abs(Inc)
+    Else
+        Exit Sub
+    End If
+    OVal = OVal + Inc
+    If OVal < ObjMinVal Then OVal = ObjMinVal
+    If OVal > ObjMaxVal Then OVal = ObjMaxVal
+
+    Call ModObject(ObjtoModify, ObjType, OVal)
+    Exit Sub
+Error:
+    
+End Sub
+
+Function GetObjVal(Obj As Object, ObjType As String) As Double
+        If ObjType = "TextBox" Then
+            GetObjVal = Val(Obj.Text)
+        ElseIf ObjType = "Label" Or ObjType = "Lbl" Or ObjType = "lbl" Then
+            GetObjVal = Val(Obj.Caption)
+        Else
+            On Error GoTo Error
+            GetObjVal = Val(Obj.Value)
+        End If
+        Exit Function
+Error:
+End Function
+
+Sub ModObject(Obj As Object, ObjType As String, NewVal As Double)
+    If ObjType = "TextBox" Then
+        Obj.Text = NewVal
+    ElseIf ObjType = "Label" Or ObjType = "Lbl" Or ObjType = "lbl" Then
+        Obj.Caption = NewVal
+    Else
+        On Error GoTo Error
+        Obj.Value = NewVal
+    End If
+    Exit Sub
+Error:
+End Sub
+
+Sub UpdateMinMax(Min As Object, Max As Object, Nom As Object, TolT As Object)
+    Dim tol As Single
+    tol = Val(TolT.Text)
+        If tol < 0 Or Val(Nom.Text) < 0 Then Exit Sub
+        Min.Text = Round(Val(Nom.Text) - tol, 3)
+        Max.Text = Round(Val(Nom.Text) + tol, 3)
+End Sub
+Sub UpdateMinMaxlbl(Min As Object, Max As Object, Nom As Object, TolT As Object)
+    Dim tol As Single
+    If isTextBox(TolT) = False Then
+        tol = Val(TolT.Caption)
+    Else
+        tol = Val(TolT.Text)
+    End If
+        If tol < 0 Or Val(Nom.Caption) < 0 Then Exit Sub
+        Min.Caption = Round(Val(Nom.Caption) - tol, 3)
+        Max.Caption = Round(Val(Nom.Caption) + tol, 3)
+End Sub
+
+Function GetExaneTol(SC As Boolean, NomOD As Double) As Double
+    Dim WS As String, row As Integer, ODcol As Integer, tcol As Integer
+    Dim tDbl As Double, EC As Integer
+    
+    WS = "Ext"
+    ThisWorkbook.Activate
+    If SC = True Then
+        ODcol = Range("Ext_SCOD").Column
+        tcol = Range("Ext_SCTol").Column
+    Else
+        ODcol = Range("Ext_MCOD").Column
+        tcol = Range("Ext_MCTol").Column
+    End If
+    row = Range("Ext_SCOD").row + 1
+    Do While EC < 4
+        tDbl = ThisWorkbook.Worksheets(WS).Cells(row, ODcol).Value
+        If tDbl > 0 Then
+            EC = 0
+            GetExaneTol = GetWSVal(WS, row, tcol)
+            If tDbl >= NomOD Then Exit Function
+        Else
+            EC = EC + 1
+        End If
+        row = row + 1
+    Loop
+End Function
+
+Sub UnloadForms()
+    On Error Resume Next
+    Unload InsulationForm
+    Unload ConductorForm
+    Unload CableForm2
+    Unload IRRForm
+    Unload TapeForm
+    Unload BraidForm
+    Unload JktForm
+    Unload ArmorForm
+    Unload TestForm
+End Sub
+
+Sub LoadColors(Cmpd As String, CompColorObj As Object, AxiomPNlblObj As Object, ColorFrameObj As Object)
+    Dim TF As Boolean, WS As String, tStr As String, tColor As String
+    Dim row As Integer, CRow As Integer, Col As Integer
+    WS = "Compounds"
+    TF = True
+    CompColorObj.Text = ""
+    CompColorObj.RowSource = ""
+    AxiomPNlblObj.Caption = ""
+        
+    If Cmpd = "" Then TF = False
+    ColorFrameObj.Visible = TF
+    If TF = False Then Exit Sub
+       
+    row = Range("Compounds_CompName").row + 1
+    Col = Range("Compounds_CompName").Column
+    CRow = GetRow(Cmpd, WS, row, Col)
+    row = Range("Compound_Natural").row
+    If CRow <= 0 Then Exit Sub
+    row = Range("Compound_Natural").row
+    Col = Range("Compound_Natural").Column
+    Do While ThisWorkbook.Worksheets("Compounds").Cells(row, Col).Text <> "End"
+        tColor = ""
+        tStr = ThisWorkbook.Worksheets("Compounds").Cells(CRow, Col).Text
+        If tStr <> "" Then tColor = ThisWorkbook.Worksheets("Compounds").Cells(row, Col).Text
+        If tColor <> "" Then CompColorObj.AddItem tColor
+        Col = Col + 1
+    Loop
+    If CompColorObj.ListCount > 0 Then CompColorObj.ListIndex = 0
+End Sub
+
+Sub FindPrintWheel(NomOD As Double, OutputlblObj As Object)
+    Dim tRow As Integer, HRow As Integer, LUCol As Integer, tcol As Integer, tDbl As Double
+    Dim WS As String, tStr As String, WTStr As String, RPF As String, EC As Integer
+    Dim OStr As String 'Output String
+    Dim ODCheck As Double
+    ODCheck = 0.3
+    OutputlblObj.Caption = ""
+    WS = "PrintWheels"
+    WTStr = "Flat"
+    OStr = WTStr
+    If NomOD < ODCheck Then WTStr = "Conc"
+    If NomOD < ODCheck Then OStr = "Concave"
+    OStr = "Type: " & OStr & vbNewLine
+    RPF = WS & "_" & WTStr
+    tStr = RPF & "OD"
+    Call GetCol(LUCol, tStr)
+    Call GetRngeRow(tRow, tStr)
+    tRow = tRow + 1
+    Do While EC < 2
+        tDbl = GetWSVal(WS, tRow, LUCol)
+        If tDbl > 0 Then EC = 0
+        If NomOD <= tDbl Then GoTo foundRow
+        tRow = tRow + 1
+        EC = EC + 1
+    Loop
+    Exit Sub
+foundRow:
+    tStr = RPF & "Width"
+    Call GetCol(tcol, tStr)
+    Call GetRngeRow(HRow, tStr)
+    OStr = OStr & "Width: " & GetWSVal(WS, tRow, tcol) & vbNewLine ' Width
+    If WTStr = "Conc" Then
+        tStr = RPF & "Radius"
+        Call GetCol(tcol, tStr)
+        OStr = OStr & "Radius: " & GetWSVal(WS, HRow, tcol) & " (" & GetWSVal(WS, HRow, tcol + 1) & ")" & vbNewLine ' Radius (Concave Only)
+    End If
+    tStr = RPF & "LetterSize"
+    Call GetCol(tcol, tStr)
+    OStr = OStr & "Letter Size:" & GetWSVal(WS, tRow, tcol, True) & """ (" & GetWSVal(WS, tRow, tcol + 1) & ")" ' Letter Size
+    OutputlblObj.Caption = OStr
+    
+End Sub
+
+Sub LoadComboBox(ComboBx As Object, RangeWS As String, RangeName As String)
+    Dim Srow As Integer, LUCol As Integer, tStr As String
+    Call GetRngeRow(Srow, RangeName)
+    Call GetCol(LUCol, RangeName)
+    tStr = "Start"
+    Do While tStr <> ""
+        Srow = Srow + 1
+        tStr = GetWSVal(RangeWS, Srow, LUCol)
+        If tStr <> "" Then ComboBx.AddItem tStr
+    Loop
+End Sub
+
+Function ComboLookUp(FindWhat As String, InWkSht As String, LURangeHeader As String, RRangeHeader As String) As String
+    If FindWhat = "" Then Exit Function
+    Dim LUCol As Integer, RCol As Integer, tRow As Integer
+    Call GetCol(LUCol, LURangeHeader)
+    Call GetCol(RCol, RRangeHeader)
+    Call GetRngeRow(tRow, LURangeHeader)
+    tRow = tRow + 1
+    ComboLookUp = TableLookUp(FindWhat, InWkSht, LUCol, RCol, tRow)
+End Function
+
+Function ClearODlbl(Minlbl As Object, Maxlbl As Object, Nomlbl As Object)
+    Minlbl.Caption = ""
+    Maxlbl.Caption = ""
+    Nomlbl.Caption = ""
+End Function
+
+Function isTextBox(Obj As Object) As Boolean
+    On Error GoTo textBx
+    Dim tStr As String
+    tStr = Obj.Caption
+    isTextBox = False
+    Exit Function
+textBx:
+    isTextBox = True
+End Function

@@ -1,0 +1,97 @@
+Enter file contents here
+Used in Add MP3 Tags Excel file
+
+Sheet 1 Code
+Option Explicit
+
+Private Sub btnList_Click()
+    Dim objFSO As Object, objFolder As Object, objFile As Object, i As Integer
+    Dim StartRow As Integer
+    Dim objShell As Shell, shFolder As folder, shFolderItem As FolderItem
+    Dim tArtist As String, tTitle As String, tFile As String, tSts As String
+    
+    If Range("FolderPath").Text = "" Then
+        MsgBox "Please Select Folder"
+        Exit Sub
+    End If
+    
+    StartRow = 4
+    Set objFSO = CreateObject("Scripting.FileSystemObject")
+    Set objFolder = objFSO.GetFolder(Range("FolderPath").Text)
+    Set objShell = New Shell
+    Set shFolder = objShell.Namespace(Range("FolderPath").Text)
+    i = StartRow
+    
+    Range("A" & i & ":G" & i + 99).ClearContents
+    ActiveSheet.Cells(i, 1).Value = GetFolderName(Range("FolderPath").Text)
+    For Each objFile In objFolder.Files
+        If Right(objFile.Name, 4) <> ".mp3" And Right(objFile.Name, 4) <> ".wma" Then GoTo skipFile
+        If i > StartRow Then ActiveSheet.Cells(i, "A").FormulaR1C1 = "=R[-1]C"
+        ActiveSheet.Cells(i, "B") = objFile.Name
+        ActiveSheet.Cells(i, "F") = objFile.Path
+        ActiveSheet.Cells(i, "E") = i - StartRow + 1
+        tFile = objFile.Name
+        Set shFolderItem = shFolder.ParseName(tFile)
+        tArtist = shFolder.GetDetailsOf(shFolderItem, 13)
+        If tArtist <> "" Then ActiveSheet.Cells(i, "C").Value = tArtist
+        tTitle = shFolder.GetDetailsOf(shFolderItem, 21)
+        If tTitle <> "" Then ActiveSheet.Cells(i, "D").Value = tTitle
+        tSts = "OK"
+        If tTitle = "" Or tArtist = "" Then tSts = ""
+        ActiveSheet.Cells(i, "G").Value = tSts
+        i = i + 1
+skipFile:
+    Next objFile
+    
+End Sub
+
+Private Sub btnSelectFolder_Click()
+    Dim fd As Office.FileDialog
+    Set fd = Application.FileDialog(msoFileDialogFolderPicker)
+   With fd
+      .AllowMultiSelect = False
+
+      ' Set the title of the dialog box.
+      .Title = "Please select a folder."
+        If Range("FolderPath").Text <> "" Then .InitialFileName = Range("FolderPath").Text
+      ' Clear out the current filters, and add our own.
+      .Filters.Clear
+    
+      If .Show = True Then Range("FolderPath").Value = .SelectedItems(1) & "\"
+    End With
+End Sub
+
+Private Sub btnUpdateTags_Click()
+    Dim tRow As Integer, tName As String, tArtist As String, tTitle As String, tTrack As Integer
+    Dim tPath As String, ID3 As CDDBCONTROLLibRoxio.CddbID3Tag, tSts As String, tFolder As String
+    
+    tRow = 4
+    Set ID3 = New CDDBCONTROLLibRoxio.CddbID3Tag
+    
+    Do
+        tName = ActiveSheet.Cells(tRow, "B").Text
+        If tName = "" Then Exit Do
+        tSts = ActiveSheet.Cells(tRow, "G").Text
+        If tSts <> "" Then GoTo skipRow
+        tArtist = ActiveSheet.Cells(tRow, "C").Text
+        tTitle = ActiveSheet.Cells(tRow, "D").Text
+        tTrack = ActiveSheet.Cells(tRow, "E").Text
+        tPath = ActiveSheet.Cells(tRow, "F").Text
+        tFolder = ActiveSheet.Cells(tRow, "A").Text
+        With ID3
+            .LoadFromFile tPath, False     ' True = Read Only
+            .LeadArtist = tArtist
+            '.Commit
+            .Title = tTitle
+            '.Commit
+            If Right(tPath, 3) = "mp3" Then .TrackPosition = tTrack
+            .Album = tFolder
+            .SaveToFile tPath
+            ActiveSheet.Cells(tRow, "G").Value = "Updated"
+        End With
+skipRow:
+        tRow = tRow + 1
+    Loop
+    Set ID3 = Nothing
+    
+End Sub

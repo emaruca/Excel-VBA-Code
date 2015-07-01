@@ -1,0 +1,2301 @@
+Enter file contents here
+
+Code for Project tracking Program - A file that uses Excel Front end and Access Back end to store project progress data
+
+//**************************************RefSheet******************************************************
+Private Sub btnShowRefs_Click()
+    Dim theRef As Variant, i As Integer
+    Dim tRow As Integer, tcol As Integer
+    
+    Set VBAEditor = Application.VBE
+    Set vbProj = ActiveWorkbook.VBProject
+
+    ActiveSheet.Cells.Clear
+    tRow = 3: tcol = 1
+    ActiveSheet.Cells(tRow, tcol).Value = "Notes"
+    ActiveSheet.Cells(tRow, tcol).Font.Bold = True
+    tRow = tRow + 1
+    ActiveSheet.Cells(tRow, tcol).Value = REFLIBNOTE
+    tRow = tRow + 2
+    ActiveSheet.Cells(tRow, tcol).Value = "Ref Name"
+    ActiveSheet.Rows(tRow).Font.Bold = True
+    ActiveSheet.Cells(tRow, tcol + 1).Value = "Description"
+    ActiveSheet.Cells(tRow, tcol + 2).Value = "File Path"
+    ActiveSheet.Cells(tRow, tcol + 3).Value = "GUID"
+    tRow = tRow + 1
+    
+    For i = ThisWorkbook.VBProject.References.Count To 1 Step -1
+        Set theRef = ThisWorkbook.VBProject.References.Item(i)
+        ActiveSheet.Cells(tRow, tcol).Value = theRef.Name
+        ActiveSheet.Cells(tRow, tcol + 1).Value = theRef.Description
+        ActiveSheet.Cells(tRow, tcol + 2).Value = theRef.FullPath
+        ActiveSheet.Cells(tRow, tcol + 3).Value = theRef.GUID
+        tRow = tRow + 1
+    Next i
+
+End Sub
+
+//**************************************Main Sheet******************************************************
+Private Sub btnAddProject_Click()
+    Call OpenForm(frmProject, "")
+End Sub
+
+Private Sub btnCloseProgram_Click()
+    If Workbooks.Count = 1 Then
+        Application.DisplayAlerts = False
+        Application.Quit
+    Else
+        ThisWorkbook.Close False
+    End If
+    
+End Sub
+
+Private Sub btnFixConnections_Click()
+    Call FixConnections
+End Sub
+
+Private Sub btnInstructions_Click()
+    Dim tStr As String, iWB As Workbook, nWB As New Workbook
+    Dim iWS As Worksheet, nWS As Worksheet, tWS As Worksheet
+    Dim tRow As Integer, tcol As Integer, eRow As Integer, cutOffRow As Integer
+    Dim sDelRow As Integer, eDelRow As Integer
+    Application.CopyObjectsWithCells = True
+    On Error GoTo err1
+    If Not TestConnection Then
+        tStr = EstablishConnection
+        If tStr <> "" Then
+            MsgBox tStr
+            Exit Sub
+        End If
+    End If
+    Set iWB = Workbooks.Open(INSTPATH, , True)
+    Set iWS = iWB.Worksheets(1)
+    Set nWB = Workbooks.Add
+    Workbooks(iWB.Name).Worksheets(iWS.Name).Copy After:=nWB.Worksheets(1)
+    Set nWS = nWB.Worksheets(iWS.Name)
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+    For Each tWS In nWB.Worksheets
+        If tWS.Name <> nWS.Name Then tWS.Delete
+    Next tWS
+    Application.DisplayAlerts = True
+    iWB.Close False
+    'Delete extra instructions that aren't needed
+    eRow = nWS.Range("ENDROW").Row
+    tcol = nWS.Range("ENDROW").Column
+   
+    For tRow = 1 To nWS.Range("I_EnableMarcos").Row
+        If nWS.Rows(tRow).RowHeight = 0 Then
+            nWS.Rows(tRow).Delete
+            tRow = tRow - 1
+        End If
+    Next tRow
+    cutOffRow = nWS.Range("I_Franchise").Row - 1
+    sDelRow = cutOffRow
+    eDelRow = eRow
+    nWS.Rows(sDelRow & ":" & eDelRow).Delete
+    GoTo Done
+err1:
+    MsgBox Err.Description
+Done:
+    Application.ScreenUpdating = True
+End Sub
+
+Private Sub btnMapDrives_Click()
+    Call MapDrives
+End Sub
+
+Private Sub btnMaintenanceMenu_Click()
+    Call OpenForm(frmMenu_Maintenance, "Admin")
+End Sub
+
+Private Sub btnOpenReportsMenu_Click()
+    Call OpenForm(frmMenu_Reports, "")
+End Sub
+
+Private Sub btnShowDevMenu_Click()
+    Call OpenForm(frmMenu_Developer, "")
+End Sub
+
+Private Sub btnShowProjectData_Click()
+    Call OpenForm(frmProjectData, "")
+End Sub
+
+Private Sub btnShowSalesMenu_Click()
+    Call OpenForm(frmMenu_Sales, "")
+End Sub
+
+Private Sub btnUpdateReferences_Click()
+    Dim tStr As String
+    tStr = AddReferences
+    If tStr = "" Then
+        MsgBox "References Up to Date"
+    Else
+        MsgBox tStr
+    End If
+End Sub
+
+Private Sub lblUpdatingConnection_Click()
+    lblUpdatingConnection.Visible = False
+End Sub
+
+Private Sub btnUserTasks_Click()
+    Call OpenForm(frmUserTasks, "")
+End Sub
+
+Private Sub lblWelcomeMsg_Click()
+    lblWelcomeMsg.Visible = False
+    If TestConnection Then Call EnableButtons
+    
+End Sub
+
+//**************************************MdlConnectionData******************************************************
+Function LoadTableData(c As Object, ViewName As String) As Object
+    Dim strSQL As String
+    Dim tRS As Object
+    
+    Set tRS = CreateObject("ADODB.Recordset")
+    strSQL = "Select * from " & ViewName
+    
+    tRS.Open strSQL, c
+    
+     i = 0
+     While Not tRS.EOF
+        i = i + 1
+        tRS.MoveNext
+     Wend
+    
+    If i = 0 Then Exit Function
+    tRS.MoveFirst
+    Set LoadTableData = tRS
+    
+End Function
+
+Function LoadTableData_Filtered(c As Object, ViewName As String, WhereCol As Collection, WhereVals As Collection) As Object
+    Dim strSQL As String, i As Integer, strWhere As String
+    Dim tRS As Object
+      
+    Set tRS = CreateObject("ADODB.Recordset")
+    strSQL = "Select * from " & ViewName
+    If WhereCol.Count > 0 Then
+        strWhere = " WHERE "
+        For i = 1 To WhereCol.Count
+            If i > 1 Then strWhere = strWhere & " AND "
+            strWhere = strWhere & "[" & WhereCol.Item(i) & "] = " & WhereVals.Item(i)
+        Next i
+        strSQL = strSQL & strWhere
+    End If
+    tRS.Open strSQL, c
+    Set LoadTableData_Filtered = tRS
+    
+End Function
+
+Function LoadTableData_Filtered_CustomWhere(c As Object, ViewName As String, WhereStr As String) As Object
+    Dim strSQL As String, tRS As Object
+      
+    Set tRS = CreateObject("ADODB.Recordset")
+    strSQL = "Select * from " & ViewName
+    If WhereStr <> "" Then strSQL = strSQL & WhereStr
+    tRS.Open strSQL, c
+    Set LoadTableData_Filtered_CustomWhere = tRS
+    
+End Function
+
+Function AddRecord(CN As Object, tblName As String, ColNames As Collection, ValsToAdd As Collection) As String
+    Dim i As Integer, cmd As Object, RS As Object
+    Dim tStr As String
+    
+    On Error GoTo err1
+    
+    Set cmd = CreateObject("ADODB.Command")
+    Set RS = CreateObject("ADODB.Recordset")
+    RS.Open tblName, CN, adOpenKeyset, adLockOptimistic
+    With RS
+        .AddNew
+        For i = 1 To ColNames.Count
+            .Fields(ColNames.Item(i)) = ValsToAdd.Item(i)
+        Next i
+        .Update
+    End With
+    'tStr = LogActivity(CN, TblName, ColNames, ValsToAdd, "Add")
+    GoTo Done
+err1:
+    AddRecord = Err.Description
+Done:
+    Set cmd = Nothing
+End Function
+
+Function ModifyRecord(CN As Object, tblName As String, ColNames As Collection, ValsToAdd As Collection, WhereCol As String, WhereVal As String) As String
+    Dim i As Integer, strSQL As String
+    Dim RS As Object
+    
+    On Error GoTo err1
+    strSQL = "SELECT * FROM " & tblName
+    If WhereCol <> "" Then strSQL = strSQL & " WHERE [" & tblName & "].[" & WhereCol & "] = " & WhereVal
+    Set RS = CreateObject("ADODB.Recordset")
+    RS.Open strSQL, CN, adOpenKeyset, adLockOptimistic
+    With RS
+        For i = 1 To ColNames.Count
+            If ValsToAdd.Item(i) = "" Then
+                .Fields(ColNames.Item(i)) = Null
+            Else
+                .Fields(ColNames.Item(i)) = ValsToAdd.Item(i)
+            End If
+        Next i
+        .Update
+    End With
+    'tStr = LogActivity(CN, TblName, ColNames, ValsToAdd, "Update", " Where " & WhereCol & " = " & WhereVal)
+    GoTo Done
+err1:
+    ModifyRecord = Err.Description
+Done:
+
+End Function
+
+Function DeleteRecord(CN As Object, tblName As String, WhereCol As String, WhereVal As String) As String
+    Dim strSQL As String, ColNames As New Collection, ValsToAdd As New Collection
+    
+    On Error GoTo err1
+    strSQL = "DELETE * FROM " & tblName & " WHERE [" & tblName & "].[" & WhereCol & "] = " & WhereVal
+    CN.Execute strSQL
+    'tStr = LogActivity(CN, TblName, ColNames, ValsToAdd, "Delete")
+    GoTo Done
+err1:
+    DeleteRecord = Err.Description
+Done:
+
+End Function
+
+Function DeleteRecord_MultipleKeys(CN As Object, tblName, WhereColNames As Collection, WhereVals As Collection) As String
+    Dim i As Integer, strSQL As String, strWhere As String
+
+    'On Error GoTo err1
+    strSQL = "DELETE * FROM " & tblName
+        
+    If WhereColNames.Count > 0 Then
+        strWhere = " WHERE "
+        For i = 1 To WhereColNames.Count
+            If i > 1 Then strWhere = strWhere & " AND "
+            strWhere = strWhere & "[" & WhereColNames.Item(i) & "] = " & WhereVals.Item(i)
+        Next i
+        strSQL = strSQL & strWhere
+    End If
+    
+    CN.Execute strSQL
+    'tStr = LogActivity(CN, TblName, ColNames, ValsToAdd, "Delete", strWhere)
+    GoTo Done
+err1:
+    DeleteRecord_MultipleKeys = Err.Description
+Done:
+
+End Function
+
+Function LogActivity(CN As Object, AffectedTbl As String, aColNames As Collection, aVals As Collection, ActionType As String, Optional WhereCondition As String) As String
+    Dim i As Integer, cmd As Object, RS As Object
+    Dim UsrName As String, tblName As String
+    Dim Cols As String, colVals As String, strSep As String
+    
+    Exit Function 'Currently Disabled due to slow performance
+    
+    On Error GoTo err1
+    
+    UsrName = Environ("USERNAME")
+    'If UsrName = "mkeeemaruca" Then Exit Sub
+    
+    If aColNames.Count > 0 Then
+        For i = 1 To aColNames.Count
+            Cols = Cols & strSep & aColNames.Item(i)
+            colVals = colVals & strSep & aVals.Item(i)
+            strSep = "||"
+        Next i
+    Else
+        Cols = "None"
+        colVals = "None"
+    End If
+    
+    If ActionType = "Delete" Then
+        Cols = "All"
+        colVals = "All"
+    End If
+    
+    If WhereCol <> "" Then Cols = Cols & WhereCondion
+    
+    Set cmd = CreateObject("ADODB.Command")
+    Set RS = CreateObject("ADODB.Recordset")
+    
+    tblName = "tblActivityLog"
+    
+    RS.Open tblName, CN, adOpenKeyset, adLockOptimistic
+    With RS
+        .AddNew
+        .Fields("ActivityDate") = Now
+        .Fields("Username") = UsrName
+        .Fields("TableAffected") = AffectedTbl
+        .Fields("FieldsAffected") = Cols
+        .Fields("Values") = colVals
+        .Fields("ActionType") = ActionType
+        .Update
+    End With
+
+    GoTo Done
+err1:
+    LogActivity = Err.Description
+    If LogActivity <> "" Then MsgBox LogActivity
+Done:
+    Set cmd = Nothing
+End Function
+
+
+//**************************************MdlConnections******************************************************
+Option Explicit
+
+Public gCN As Object
+
+Sub SetCNVar()
+    On Error GoTo err1
+    Set gCN = CreateObject("ADODB.Connection")
+    Exit Sub
+err1:
+    MsgBox "Reference Error: Please Click on 'Update References' Button on main page"
+    End
+End Sub
+
+Function EstablishConnection() As String
+    On Error GoTo err1
+    Call SetCNVar
+    If (gCN.State And 1) = 1 Then Call CloseConnection
+    With gCN
+        .Provider = "Microsoft.ACE.OLEDB.12.0"
+        .ConnectionString = "Data Source=" & DBPATH & DBFILENAME
+        .Mode = 3 'adModeReadWrite
+        .Open
+    End With
+    Call EnableButtons
+    Exit Function
+err1:
+    EstablishConnection = Err.Description
+End Function
+
+Sub CloseConnection()
+    On Error Resume Next
+    If (gCN.State And 1) = 1 Then gCN.Close
+    Set gCN = Nothing
+    Call SetCNVar
+    Call DisableButtons
+End Sub
+
+Function getConnection() As Object
+    Dim Chk As String
+    On Error GoTo err1
+    If Not (gCN.State And 1) = 1 Then Chk = EstablishConnection
+    
+    On Error GoTo err2
+    If Chk <> "" Then GoTo err2
+    Set getConnection = gCN
+    
+    Exit Function
+err1:
+    Call CloseConnection
+    Resume
+err2:
+    MsgBox "Error establishing connection, Please ensure you are connected to Smith's network drives"
+    If Chk <> "" Then MsgBox "Error: " & Chk
+End Function
+
+Function AccessIsGranted(Optional Cat As String) As Boolean
+    Dim UN As String, CN As Object, RS As Object, ColName As New Collection, ColVal As New Collection
+    
+    On Error GoTo err1
+    If Cat = "" Then 'allow access to anyone
+        AccessIsGranted = True
+        Exit Function
+    End If
+    
+    UN = Environ("USERNAME")
+    AccessIsGranted = False
+
+    ColName.Add "UserName"
+    ColVal.Add """" & UN & """"
+        
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered(CN, "tblUserAccess", ColName, ColVal)
+    Do While Not RS.EOF
+        If RS("Category").Value = Cat Or RS("Category").Value = "All" Then
+            AccessIsGranted = RS("GrantAccess").Value
+            Exit Do
+        End If
+        RS.MoveNext
+    Loop
+    
+    RS.Close
+    Set RS = Nothing
+    'CN.Close
+    Set CN = Nothing
+    
+    'If Not AccessIsGranted Then MsgBox "You do not have sufficient privileges to perform this operation"
+    Exit Function
+err1:
+    MsgBox Err.Description
+End Function
+
+Sub OpenForm(Frm As Object, Cat As String)
+    Dim UN As String, CN As Object, RS As Object, ColName As New Collection, ColVal As New Collection
+    Dim AccessGranted As Boolean, tAns As String, checkval As String
+    
+    On Error GoTo err1
+    If Cat = "" Then 'allow access to anyone
+        AccessGranted = True
+        Frm.Show
+        Set Frm = Nothing
+        Exit Sub
+    End If
+    
+    UN = Environ("USERNAME")
+    AccessGranted = False
+
+    ColName.Add "UserName"
+    ColVal.Add """" & UN & """"
+        
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered(CN, "tblUserAccess", ColName, ColVal)
+    Do While Not RS.EOF
+        If RS("Category").Value = Cat Or RS("Category").Value = "All" Or RS("Category").Value = "Admin" Then
+            AccessGranted = RS("GrantAccess").Value
+            If RS("Category").Value = "Admin" Or RS("Category").Value = "All" Then AccessGranted = True
+            If AccessGranted Then Frm.Show
+            Exit Do
+        End If
+        RS.MoveNext
+    Loop
+    
+    RS.Close
+    Set RS = Nothing
+    
+    If Not AccessGranted Then
+        tAns = MsgBox("You do not have sufficient privileges to perform this operation & vbnewline" _
+        & "Would you like to request access?", vbYesNo, "Access Denied")
+        If tAns = vbNo Then Exit Sub
+        If (CN.State And 1) <> 1 Then Set CN = getConnection
+        Set ColName = New Collection: Set ColVal = New Collection
+        ColName.Add "DateOfRequest"
+        ColName.Add "UserName"
+        ColName.Add "FormName"
+        ColName.Add "Category"
+        ColVal.Add Date
+        ColVal.Add UN
+        ColVal.Add Frm.Name
+        ColVal.Add Cat
+        
+        checkval = AddRecord(CN, "tblUserAccessRequest", ColName, ColVal)
+        If checkval <> "" Then
+            MsgBox "Error: " & checkval
+        Else
+            MsgBox "Your request has been submitted"
+        End If
+    End If
+    
+    'CN.Close
+    Set CN = Nothing
+    Exit Sub
+err1:
+    MsgBox "An Error Occured, Please press the 'Update References' button and try again"
+
+End Sub
+
+Sub FixConnections()
+    Dim CN As Object, tStr As String
+    
+    On Error GoTo Done
+    If Not TestConnection Then
+        'tStr = MapDrives
+        'If tStr = "" Then
+        '    MsgBox "A Command line should be running, once complete, please press OK"
+        'Else
+        '    GoTo Done
+        'End If
+        Call EstablishConnection
+        If TestConnection Then
+            MsgBox "Connection updated"
+        Else
+            MsgBox "Error: Could Not Connect"
+        End If
+    Else
+        MsgBox "Connection Successful"
+        Call EnableButtons
+    End If
+        
+    Exit Sub
+Done:
+    If tStr = "" Then tStr = Err.Description
+    MsgBox "Error: " & tStr
+    MsgBox "Please make sure you are connected to a Smith's network or are using VPN"
+End Sub
+
+Function MapDrives() As String
+    Dim UN As String, Facility As String
+    Dim FilePath As String
+    Dim RetVal
+
+    On Error GoTo err1
+    UN = Environ("USERNAME")
+    Facility = Left(UN, 4)
+    FilePath = "C:\Users\" & UN
+    RetVal = Shell(FilePath & "\" & Facility & ".bat")
+    MsgBox "Network drives are currently being mapped, please wait until command prompt is complete before continuing"
+    Exit Function
+err1:
+    MapDrives = Err.Description
+End Function
+
+Function TestConnection() As Boolean
+    Dim CN As Object
+    On Error GoTo err1
+    Set CN = gCN
+    If (CN.State And 1) = 1 Then
+        TestConnection = True
+        Exit Function
+    End If
+    Set CN = Nothing
+err1:
+    TestConnection = False
+End Function
+
+Function DeveloperStatus() As Boolean
+    DeveloperStatus = False
+    If Environ("USERNAME") = "mkeeemaruca" Then DeveloperStatus = True
+End Function
+
+//**************************************MdlConstants******************************************************
+Public Const COLCELLWIDTHRATIO As Double = 5.2
+Public Const DBPATH As String = "\\medical.smgpplc.com\dfs\Work\MKEE Work_Files\Global Curriculum\"
+'Public Const DBPATH As String = "C:\EMaruca\Project Tracking\"
+Public Const DBFILENAME As String = "Global Curriculum Project Tracking Data.accdb"
+Public Const DBINSTALLPATH As String = "\\medical.smgpplc.com\dfs\Work\MKEE Work_Files\Global Curriculum\Distribution\InstallFiles\"
+Public Const INSTALLPATH As String = "\\medical.smgpplc.com\dfs\Work\MKEE Work_Files\Public\Global Curriculum Project Tracking\InstallFiles\"
+Public Const INSTPATH As String = "\\medical.smgpplc.com\dfs\Work\MKEE Work_Files\Global Curriculum\Instructions for Global Curriculum Project Tracking.xlsm"
+'Public Const INSTPATH As String = "http://wss.smiths-medical.net/communitysites/departments/hr/SMGTraining/Shared%20Documents/Global%20Curriculum%20Project/Project%20Tracking/Instructions%20for%20Global%20Curriculum%20Project%20Tracking.xlsm"
+Public Const ORIGWBPATH As String = "C:\EMaruca\Project Tracking\"
+Public Const REFLIBNOTE As String = "In Security settings, ensure that ""Trust Access To Visual Basic Project"" is checked"
+Public Const SMLOGONAME As String = "SmithsLogo.jpg"
+Public Const DISTPATH As String = "\\medical.smgpplc.com\dfs\Work\MKEE Work_Files\Public\Global Curriculum Project Tracking\"
+Public Const BACKUP_PATH_DEVELOPMENT As String = "C:\EMaruca\Project Tracking Backup\Development\"
+Public Const BACKUP_PATH_PRODUCTION As String = "C:\EMaruca\Project Tracking Backup\Production Copies\"
+Public Const BACKUP_PATH_DISTRIBUTION As String = "C:\EMaruca\Project Tracking Backup\Public Distribution\"
+
+//**************************************MdlHyperlink******************************************************
+Option Explicit
+
+'************ Code Start **********
+' This code was originally written by Dev Ashish.
+' It is not to be altered or distributed,
+' except as part of an application.
+' You are free to use it in any application,
+' provided the copyright notice is left unchanged.
+'
+' Code Courtesy of
+' Dev Ashish
+'
+Private Declare Function apiShellExecute Lib "shell32.dll" Alias "ShellExecuteA" (ByVal hwnd As Long, _
+    ByVal lpOperation As String, ByVal lpFile As String, ByVal lpParameters As String, ByVal lpDirectory As String, _
+    ByVal nShowCmd As Long) As Long
+
+'***App Window Constants***
+Public Const WIN_NORMAL = 1         'Open Normal
+Public Const WIN_MAX = 3            'Open Maximized
+Public Const WIN_MIN = 2            'Open Minimized
+
+'***Error Codes***
+Private Const ERROR_SUCCESS = 32&
+Private Const ERROR_NO_ASSOC = 31&
+Private Const ERROR_OUT_OF_MEM = 0&
+Private Const ERROR_FILE_NOT_FOUND = 2&
+Private Const ERROR_PATH_NOT_FOUND = 3&
+Private Const ERROR_BAD_FORMAT = 11&
+
+
+'***************Usage Examples***********************
+'Open a folder:     ?fHandleFile("C:\TEMP\",WIN_NORMAL)
+'Call Email app:    ?fHandleFile("mailto:dash10@hotmail.com",WIN_NORMAL)
+'Open URL:          ?fHandleFile("http://home.att.net/~dashish", WIN_NORMAL)
+'Handle Unknown extensions (call Open With Dialog): ?fHandleFile("C:\TEMP\TestThis",Win_Normal)
+'Start Access instance: ?fHandleFile("I:\mdbs\CodeNStuff.mdb", Win_NORMAL)
+'****************************************************
+
+Function fHandleFile(stFile As String, lShowHow As Long)
+Dim lRet As Long, varTaskID As Variant, hWndApp As Long
+Dim stRet As String
+    'First try ShellExecute
+    lRet = apiShellExecute(hWndApp, vbNullString, stFile, vbNullString, vbNullString, lShowHow)
+            
+    If lRet > ERROR_SUCCESS Then
+        stRet = vbNullString
+        lRet = -1
+    Else
+        Select Case lRet
+            Case ERROR_NO_ASSOC:
+                'Try the OpenWith dialog
+                varTaskID = Shell("rundll32.exe shell32.dll,OpenAs_RunDLL " _
+                        & stFile, WIN_NORMAL)
+                lRet = (varTaskID <> 0)
+            Case ERROR_OUT_OF_MEM:
+                stRet = "Error: Out of Memory/Resources. Couldn't Execute!"
+            Case ERROR_FILE_NOT_FOUND:
+                stRet = "Error: File not found.  Couldn't Execute!"
+            Case ERROR_PATH_NOT_FOUND:
+                stRet = "Error: Path not found. Couldn't Execute!"
+            Case ERROR_BAD_FORMAT:
+                stRet = "Error:  Bad File Format. Couldn't Execute!"
+            Case Else:
+        End Select
+    End If
+    fHandleFile = lRet & IIf(stRet = "", vbNullString, ", " & stRet)
+End Function
+'************ Code End **********
+
+
+//**************************************MdlProgramStatus******************************************************
+Option Explicit
+
+Function WSUsed(WS As Worksheet) As Boolean
+    On Error GoTo Done
+    If WS.Name <> "" Then WSUsed = True
+    Exit Function
+Done:
+    WSUsed = False
+End Function
+
+Function CheckName(tName As String) As String
+    Dim i As Integer, tChar As String
+    For i = 1 To Len(tName)
+        tChar = Mid(tName, i, 1)
+        If tChar = " " Then tChar = "_"
+        If tChar = "\" Then tChar = "_"
+        If tChar = "/" Then tChar = "_"
+        If tChar = "?" Then tChar = "_"
+        If tChar = "*" Then tChar = "_"
+        If tChar = "[" Then tChar = "_"
+        If tChar = "]" Then tChar = "_"
+        If tChar = "&" Then tChar = "And"
+        If tChar = "," Then tChar = "_"
+        If tChar = "-" Then tChar = "_"
+        If tChar = "'" Then tChar = ""
+        CheckName = CheckName & tChar
+    Next i
+    If Len(CheckName) > 31 Then CheckName = Left(CheckName, 31)
+End Function
+
+Function Find(TextToFind As String, WithinText As String, Optional StartNum As Integer) As Integer
+    'Returns start position if TextToFind if text is found in WithinText, -1 if not found
+    Dim i As Integer, StartI As Integer
+    StartI = 1
+    If StartNum > 0 Then StartI = StartNum
+     For i = StartI To Len(WithinText)
+        If Len(TextToFind) + i > Len(WithinText) Then Exit For
+        If Mid(WithinText, i, Len(TextToFind)) = TextToFind Then
+            Find = i
+            Exit Function
+        End If
+     Next i
+    Find = -1
+End Function
+
+
+
+//**************************************References******************************************************
+'To be used with ref worksheet
+Option Explicit
+
+Function AddReferences() As String
+    Dim theRef As Variant, i As Integer, tStr As String
+    Dim tRow As Integer, tcol As Integer, WS As Worksheet
+    
+    tStr = CheckRefWS
+    If tStr <> "" Then
+        MsgBox tStr
+        Exit Function
+    End If
+    
+    Set WS = ThisWorkbook.Worksheets("ref")
+    tStr = RemoveBrokenRefs
+    If tStr <> "" Then Exit Function
+    tRow = Range("RefGUID").Row + 1: tcol = Range("RefGUID").Column
+    
+    Do
+        tStr = WS.Cells(tRow, tcol).Text
+        If tStr = "" Then Exit Do
+        On Error GoTo err1
+        ThisWorkbook.VBProject.References.AddFromGuid tStr, 1, 0
+        tRow = tRow + 1
+    Loop
+    
+    Exit Function
+err1:
+    Select Case Err.Number
+    Case Is = 32813
+         'Reference already in use.  No action necessary
+    Case Is = vbNullString
+         'Reference added without issue
+    Case Else
+         'An unknown error was encountered, so alert the user
+        AddReferences = "A problem was encountered trying to" & vbNewLine _
+        & "add or remove a reference in this file" & vbNewLine & "Please check the " _
+        & "references in your VBA project!" & vbNewLine & vbNewLine _
+        & "Note: " & REFLIBNOTE
+    End Select
+    Resume Next
+
+End Function
+    
+Function RemoveBrokenRefs() As String
+    Dim i As Integer, theRef As Variant
+    On Error GoTo err1
+    For i = ThisWorkbook.VBProject.References.Count To 1 Step -1
+        Set theRef = ThisWorkbook.VBProject.References.Item(i)
+        If theRef.IsBroken Then ThisWorkbook.VBProject.References.Remove theRef
+    Next i
+    Exit Function
+err1:
+    MsgBox "Note: Please do the following to continue: " & vbNewLine & REFLIBNOTE _
+    & vbNewLine & "File => Options => Trust Center => Trust Center Settings..."
+    RemoveBrokenRefs = Err.Description
+End Function
+
+Function CheckRefWS() As String
+    On Error GoTo err1
+    CheckRefWS = ThisWorkbook.Worksheets("ref").Cells(1, 1).Text
+    CheckRefWS = ""
+    Exit Function
+err1:
+    CheckRefWS = "ref Worksheet needed to perform this function"
+End Function
+
+Function TestReferences() As String
+    Dim X As Object, Chk As String
+    On Error GoTo err1
+    Set X = CreateObject("ADODB.Connection")
+    Set X = Nothing
+    Set X = CreateObject("Collection")
+    Set X = Nothing
+    Exit Function
+err1:
+    TestReferences = AddReferences
+End Function
+
+//**************************************MdlReport******************************************************
+Option Explicit
+Sub ExportProject(ProjectID As String, Optional PLWS As Worksheet)
+    Dim WS As Worksheet, ProjName As String, tProjRow As Integer, WB As Workbook
+    Dim CN As ADODB.Connection, RS As ADODB.Recordset, RS_StageNames As ADODB.Recordset
+    Dim ColName As New Collection, colVals As New Collection
+    
+    Dim tRow As Integer, tcol As Integer, sCol As Integer
+    Dim tDataID As Integer, MultNames As Boolean, TableRange As Range
+    Dim ColName2 As New Collection, ColVals2 As Collection, RespNames As String, strComma As String
+    
+    sCol = 1
+    ColName.Add "ProjectID"
+    colVals.Add """" & ProjectID & """"
+    ColName2.Add "DataID"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered(CN, "qryProjectReport", ColName, colVals)
+    ProjName = RS("Project Name").Value
+    Application.ScreenUpdating = False
+    If Not PLWS Is Nothing Then
+        Set WS = PLWS
+    Else
+        Set WB = Workbooks.Add
+        Call RemoveExtraWS(WB)
+        Set WS = ActiveWorkbook.Worksheets(1)
+        WS.Name = ProjectID
+    End If
+    
+    tRow = 1: tcol = sCol
+    If WS.Cells(tRow, tcol).Text <> "" Then
+        Do
+            If WS.Cells(tRow, tcol).Text = "" Then GoTo skipHeader
+            tRow = tRow + 1
+        Loop
+    End If
+    
+    'Project Header Data
+    With WS.Cells(tRow, sCol)
+        .Value = "Report Date:"
+        .HorizontalAlignment = xlRight
+        .Font.Bold = True
+    End With
+    WS.Cells(tRow, sCol + 1).Value = Date
+    WS.Cells(tRow, sCol + 1).HorizontalAlignment = xlLeft: tRow = tRow + 1
+    'Table Headers
+    WS.Cells(tRow, tcol).Value = "Course Number": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "ADDIE Stage": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Task": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Date Started": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Due Date": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Last Updated": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Status": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Notes": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Responsible": tcol = tcol + 1
+    WS.Cells(tRow, tcol).Value = "Task Points": tcol = tcol + 1
+    Set TableRange = Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, tcol - 1).AddressLocal)
+    TableRange.Font.Bold = True
+    TableRange.Interior.Color = RGB(79, 129, 189)
+    TableRange.Font.Color = RGB(255, 255, 255)
+    tRow = tRow + 1
+    WS.Cells(tRow, sCol).Select
+    ActiveWindow.FreezePanes = True
+skipHeader:
+    tcol = sCol
+    tProjRow = tRow
+    WS.Cells(tRow, tcol).Value = "Project: " & RS("Project Name").Value & " (" & RS("ProjectID").Value & ")": tcol = tcol + 1
+    Set TableRange = Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, tcol + 6).AddressLocal)
+    TableRange.WrapText = False
+    TableRange.Font.Bold = True
+    TableRange.Merge
+    
+    WS.Cells(tRow, tcol + 7).Value = "% Complete"
+    WS.Cells(tRow, tcol + 7).Font.Bold = True
+    
+    tRow = tRow + 1
+    While Not RS.EOF
+        tcol = sCol
+        WS.Cells(tRow, tcol).Value = RS("ProjectID").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Description").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Name of Task").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Date Started").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Date Due").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Date Complete").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Status").Value: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Notes").Value: tcol = tcol + 1
+        tDataID = RS("DataID").Value
+        Set ColVals2 = New Collection
+        ColVals2.Add tDataID
+        Set RS_StageNames = New ADODB.Recordset
+        Set RS_StageNames = LoadTableData_Filtered(CN, "qryProjectReport_ResponsiblePeople", ColName2, ColVals2)
+        MultNames = False
+        RespNames = "": strComma = ""
+        While Not RS_StageNames.EOF
+            If MultNames Then strComma = "," & vbNewLine
+            RespNames = RespNames & strComma & RS_StageNames("Name").Value
+            MultNames = True
+            RS_StageNames.MoveNext
+        Wend
+        RS_StageNames.Close
+        WS.Cells(tRow, tcol).Value = RespNames: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = RS("Points").Value: tcol = tcol + 1
+        tRow = tRow + 1
+        RS.MoveNext
+    Wend
+    tRow = tRow - 1
+    tcol = sCol
+    WS.Cells(tProjRow, tcol + 9).FormulaR1C1 = "=(SUMIF(R[1]C[-3]:R" & tRow & "C[-3],""Complete"",R[1]C:R" & tRow & "C)+SUMIF(R[1]C[-3]:R" & tRow & "C[-3],""N/A"",R[1]C:R" & tRow & "C))/SUM(R[1]C:R" & tRow & "C)"
+    WS.Cells(tProjRow, tcol + 9).Style = "Percent"
+    RS.MoveFirst
+    ActiveWorkbook.Names.Add Name:=RS("ProjectID").Value, RefersToR1C1:="=" & WS.Name & "!R" & tProjRow & "C" & tcol + 9
+    WS.Rows(tProjRow + 1 & ":" & tRow).Group
+    RS.Close
+    'CN.Close
+    
+    Set CN = Nothing
+    Set RS = Nothing
+    Set RS_StageNames = Nothing
+    'Format Columns
+    tcol = sCol
+    Columns(tcol).ColumnWidth = 15: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 25: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 40: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 12: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 11: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 11: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 11: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 40: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 16: tcol = tcol + 1
+    Columns(tcol).ColumnWidth = 11.5: tcol = tcol + 1
+    Set TableRange = Range(WS.Cells(2, sCol).AddressLocal & ":" & WS.Cells(tRow, tcol - 1).AddressLocal)
+    Call AddBorders(TableRange)
+    TableRange.HorizontalAlignment = xlCenter
+    TableRange.VerticalAlignment = xlTop
+    TableRange.WrapText = True
+    If Not PLWS Is Nothing Then
+        WS.Outline.ShowLevels RowLevels:=1
+        WS.Outline.SummaryRow = xlAbove
+    End If
+    WS.Cells(3, 1).Activate
+    Call SetPageHeaders(WS, False, "")
+    If PLWS Is Nothing Then Application.ScreenUpdating = True
+End Sub
+
+Sub GenSummaryReport()
+    Dim WS As Worksheet, WB As Workbook
+    Dim CN As Object, RS As Object, RS_Detail As Object
+    Dim ColName As New Collection, colVals As New Collection, ColName_People As New Collection
+    
+    Dim totStages As Integer, totProjects As Integer, totProj_Open As Integer, totProj_NotStarted As Integer
+    Dim totProj_Complete As Integer, tProjID As String, tDataID As Integer
+    Dim strComma As String, MultNames As Boolean, RespNames As String
+    Dim tRow As Integer, tcol As Integer, sCol As Integer, i As Integer, tRng As Range
+    Dim s As New frmProgramStatus, tProjNum As Integer
+    
+    On Error GoTo err1
+    sCol = 1
+    s.Show
+    Application.ScreenUpdating = False
+    s.lblStatus.Caption = "Connecting": DoEvents
+    Set CN = getConnection
+    
+    'Get Total stages
+    s.lblStatus.Caption = "Loading Header Data": DoEvents
+    Set RS = LoadTableData(CN, "qryTotStages")
+    totStages = RS(0).Value
+    RS.Close
+    
+    'Get Total Projects
+    Set RS = LoadTableData(CN, "qryTotProjects")
+    totProjects = RS(0).Value
+    RS.Close
+    
+    Set RS = LoadTableData(CN, "qryListOfProjectsNotStarted")
+    While Not RS.EOF
+        totProj_NotStarted = totProj_NotStarted + 1
+        RS.MoveNext
+    Wend
+    RS.Close
+    
+    'Get Total Open Projects
+    Set RS = LoadTableData(CN, "qryListofOpenProj")
+    While Not RS.EOF
+        totProj_Open = totProj_Open + 1
+        RS.MoveNext
+    Wend
+    
+    'Get Completed Projects
+    totProj_Complete = totProjects - totProj_Open - totProj_NotStarted
+    RS.MoveFirst
+    '***********************Load Data in New Excel Sheet*********************************
+    s.lblStatus.Caption = "Generating Workbook": DoEvents
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = ActiveWorkbook.Worksheets(1)
+    WS.Name = "Summary"
+    
+    'Project Header Data
+    tRow = 1: tcol = sCol
+    WS.Cells(tRow, tcol).Value = "Project Summary Report"
+    WS.Cells(tRow, tcol).Font.Bold = True
+    WS.Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + 10).AddressLocal).Merge
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 2
+    WS.Cells(tRow, tcol).Value = "Projects Summary"
+    WS.Cells(tRow, tcol).Font.Underline = True
+    
+    tRow = tRow + 1
+    WS.Cells(tRow, tcol).Value = "Total Projects:"
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlRight
+    WS.Cells(tRow, tcol + 1).Value = totProjects
+    WS.Cells(tRow, tcol + 1).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 1
+    WS.Cells(tRow, tcol).Value = "Total Open:"
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlRight
+    WS.Cells(tRow, tcol + 1).Value = totProj_Open
+    WS.Cells(tRow, tcol + 1).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 1
+    WS.Cells(tRow, tcol).Value = "Total Complete:"
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlRight
+    WS.Cells(tRow, tcol + 1).Value = totProj_Complete
+    WS.Cells(tRow, tcol + 1).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 1
+    WS.Cells(tRow, tcol).Value = "Total Not Started:"
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlRight
+    WS.Cells(tRow, tcol + 1).Value = totProj_NotStarted
+    WS.Cells(tRow, tcol + 1).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 2
+    WS.Cells(tRow, tcol).Value = "Open Projects Summary:"
+    WS.Cells(tRow, tcol).Font.Bold = True
+    WS.Cells(tRow, tcol).Font.Color = vbWhite
+    With WS.Cells(tRow, tcol).Interior
+        .Pattern = xlSolid
+        .PatternColorIndex = xlAutomatic
+        .ThemeColor = xlThemeColorDark1
+        .TintAndShade = -0.499984740745262
+        .PatternTintAndShade = 0
+    End With
+    Set tRng = Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + 11).AddressLocal)
+    tRng.Merge
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    
+    tRow = tRow + 1
+    For i = 1 To 4
+        WS.Cells(tRow, tcol + i - 1).Value = RS(i).Name
+    Next i
+    
+    WS.Cells(tRow, tcol + i - 1).Value = "ADDIE Stage": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Task": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Date Started": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Date Due": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Date Updated": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Status": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Notes": i = i + 1
+    WS.Cells(tRow, tcol + i - 1).Value = "Resp": i = i + 1
+    Set tRng = Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + 11).AddressLocal)
+    Call AddBorders(tRng)
+    WS.Rows(tRow).Font.Bold = True
+    tRow = tRow + 1
+    ColName.Add "ProjectID"
+    ColName_People.Add "DataID"
+    i = 0
+    'Formatting
+    WS.Cells.VerticalAlignment = xlTop
+    WS.Columns(sCol + i).ColumnWidth = 25: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 15: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 30: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 15: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 34: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 13: i = i + 1
+    For i = 0 To 11
+        WS.Columns(sCol + i).HorizontalAlignment = xlCenter
+    Next i
+    WS.Cells.WrapText = True
+    '****************Pull Data from Report *******************************************
+    s.lblStatus.Caption = "Populating Workbook": DoEvents
+    tProjNum = 1 'for displaying status to user
+    While Not RS.EOF
+        WS.Cells(tRow, tcol).Value = RS("Project Name").Value
+        s.lblStatus.Caption = "Loading " & RS("Project Name").Value & vbNewLine & tProjNum & " of " & totProj_Open: DoEvents
+        tProjNum = tProjNum + 1
+        WS.Cells(tRow, tcol + 1).Value = RS("Initiator").Value
+        WS.Cells(tRow, tcol + 2).Value = RS("SME").Value
+        WS.Cells(tRow, tcol + 3).Value = RS("Producer").Value
+        Call AddBorders(Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + 3).AddressLocal))
+        tProjID = RS("ID").Value
+        Set colVals = New Collection
+        colVals.Add """" & tProjID & """"
+        Set RS_Detail = LoadTableData_Filtered(CN, "qryCurrentStageOfOpenProject_Detail", ColName, colVals)
+        
+        For i = 1 To 7
+            If IsNull(RS_Detail(i).Value) Then GoTo skipFld
+            WS.Cells(tRow, tcol + 3 + i).Value = RS_Detail(i).Value
+skipFld:
+            Call AddBorders(Range(WS.Cells(tRow, tcol + 3 + i).AddressLocal))
+        Next i
+        tDataID = RS_Detail("DataID").Value
+        RS_Detail.Close
+        Set colVals = New Collection
+        colVals.Add tDataID
+        Set RS_Detail = LoadTableData_Filtered(CN, "qryProjectReport_ResponsiblePeople", ColName_People, colVals)
+        MultNames = False
+        RespNames = "": strComma = ""
+        While Not RS_Detail.EOF
+            If MultNames Then strComma = "," & vbNewLine
+            RespNames = RespNames & strComma & RS_Detail("Name").Value
+            MultNames = True
+            RS_Detail.MoveNext
+        Wend
+        RS_Detail.Close
+        Set RS_Detail = Nothing
+        WS.Cells(tRow, tcol + 3 + i).Value = RespNames
+        Call AddBorders(Range(WS.Cells(tRow, tcol + 3 + i).AddressLocal))
+        tRow = tRow + 1
+skipData:
+        RS.MoveNext
+    Wend
+    
+    RS.Close
+
+    Call SetPageHeaders(WS, True, "")
+    GoTo Done
+err1:
+    MsgBox "An Error Occured, Please press the 'Update References' button and try again"
+Done:
+    s.Hide
+    Application.ScreenUpdating = True
+    
+End Sub
+
+Sub GenerateLOReport(ProdName As String, QryName As String)
+    Dim CN As Object, RS As Object, tRng As Range
+    Dim ColName As New Collection, colVals As New Collection, WS As Worksheet
+    
+    Dim tPL As String, tLO As Integer, AddProj As Boolean
+    
+    Dim tRow As Integer, tcol As Integer, sCol As Integer
+    Dim TableRange As Range, WB As Workbook
+    
+    sCol = 1
+    Set CN = getConnection
+    If ProdName = "" Or ProdName = "All" Then
+        Set RS = LoadTableData(CN, QryName)
+    Else
+        ColName.Add "ProductLine"
+        colVals.Add """" & ProdName & """"
+        Set RS = LoadTableData_Filtered(CN, QryName, ColName, colVals)
+    End If
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = ActiveWorkbook.Worksheets(1)
+            
+    AddProj = False
+    If QryName = "qryLOMetwithProject" Then AddProj = True
+    
+    'Project Header Data
+    tRow = 1: tcol = sCol
+    WS.Cells(tRow, tcol).Value = "Learning Objectives By Product Line"
+    If AddProj Then WS.Cells(tRow, tcol).Value = WS.Cells(tRow, tcol).Value & " That are Satisfied by Project"
+    WS.Rows(tRow).Font.Bold = True
+    WS.Cells(tRow, tcol).Font.Size = 16
+    
+    WS.Cells(tRow, tcol + 4).Value = "Date of Report: " & Date
+    tRow = tRow + 2
+    While Not RS.EOF
+        If RS("ProductLine").Value <> tPL Then
+            tPL = RS("ProductLine").Value
+            tLO = RS("LONumber").Value
+            WS.Cells(tRow, tcol).Value = "Product Line: " & tPL
+            WS.Cells(tRow, tcol).Font.Bold = True
+            WS.Cells(tRow, tcol).Font.Underline = True
+            tRow = tRow + 1
+            WS.Cells(tRow, tcol + 1).Value = "Learning Objective:"
+            WS.Rows(tRow).Font.Bold = True
+            If AddProj Then WS.Cells(tRow, tcol + 4).Value = "Satisfied By Project:"
+            tRow = tRow + 1
+            WS.Cells(tRow, tcol + 2).Value = tLO & ": " & RS("LODescription").Value
+            WS.Cells(tRow, tcol + 2).Font.Underline = True
+            Set tRng = Range(WS.Cells(tRow, tcol + 2).AddressLocal & ":" & WS.Cells(tRow, tcol + 4).AddressLocal)
+            tRng.Merge
+            tRng.WrapText = True
+            If Len(WS.Cells(tRow, tcol + 2).Text) > 112 Then
+                tRng.RowHeight = 30
+            End If
+            tRow = tRow + 1
+        ElseIf RS("LONumber").Value <> tLO Then
+            tLO = RS("LONumber").Value
+            WS.Cells(tRow, tcol + 2).Value = tLO & ": " & RS("LODescription").Value
+            WS.Cells(tRow, tcol + 2).Font.Underline = True
+            Set tRng = Range(WS.Cells(tRow, tcol + 2).AddressLocal & ":" & WS.Cells(tRow, tcol + 4).AddressLocal)
+            tRng.Merge
+            tRng.WrapText = True
+            If Len(WS.Cells(tRow, tcol + 2).Text) > 112 Then
+                tRng.RowHeight = 30
+            End If
+            tRow = tRow + 1
+        End If
+        WS.Cells(tRow, tcol + 3).Value = RS("LODetail").Value & ") " & RS("Description").Value
+        If AddProj Then WS.Cells(tRow, tcol + 4).Value = RS("Project Name").Value
+        tRow = tRow + 1
+        RS.MoveNext
+    Wend
+    
+    RS.Close
+    'CN.Close
+    
+    Set CN = Nothing
+    Set RS = Nothing
+    'Format Columns
+    Columns(sCol).ColumnWidth = 4.3
+    Columns(sCol + 1).ColumnWidth = 4.3
+    Columns(sCol + 2).ColumnWidth = 4.3
+    Columns(sCol + 3).ColumnWidth = 75
+    Columns(sCol + 4).ColumnWidth = 38.5
+    Columns(sCol + 3).WrapText = True
+    Columns(sCol + 4).WrapText = True
+    WS.Cells.VerticalAlignment = xlTop
+    
+    Call SetPageHeaders(WS, True, "ADDIE: Analysis")
+    
+End Sub
+
+Sub GenUserTasksReport(LVW As ListView)
+    Dim WS As Worksheet, PS As New frmProgramStatus, WB As Workbook
+    Dim maxCol As Integer, tLI As Integer, tPeopleID As Integer
+    Dim tRow As Integer, tcol As Integer, sCol As Integer, i As Integer, tRng As Range
+    
+    maxCol = 8
+    On Error GoTo err1
+    PS.Show
+    PS.lblStatus.Caption = "Gathering Data"
+    Application.ScreenUpdating = False
+    sCol = 1
+    
+    'Get User Task Data
+    If LVW.ListItems.Count = 0 Then
+        MsgBox "No open tasks found"
+        GoTo Done
+    End If
+    '***********************Load Data in New Excel Sheet*********************************
+    PS.lblStatus.Caption = "Creating Excel File": DoEvents
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = ActiveWorkbook.Worksheets(1)
+    WS.Name = "User Tasks"
+        
+    'Project Header Data
+    tRow = 1: tcol = sCol
+    WS.Cells(tRow, tcol).Value = "User Open Tasks Report"
+    WS.Cells(tRow, tcol).Font.Bold = True
+    WS.Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + maxCol - 1).AddressLocal).Merge
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    tRow = tRow + 2
+    PS.lblStatus.Caption = "Populating Excel File": DoEvents
+    '****************Populate Data from Report *******************************************
+    For tLI = 1 To LVW.ListItems.Count
+        If Val(LVW.ListItems(tLI).ListSubItems(10).Text) = tPeopleID Then GoTo skipHeaders
+        tPeopleID = Val(LVW.ListItems(tLI).ListSubItems(10).Text)
+        WS.Cells(tRow, tcol).Value = "Name: " & LVW.ListItems(tLI).ListSubItems(7).Text
+        WS.Cells(tRow, tcol).Font.Bold = True
+        WS.Cells(tRow, tcol).Font.Color = vbWhite
+        With WS.Cells(tRow, tcol).Interior
+            .Pattern = xlSolid
+            .PatternColorIndex = xlAutomatic
+            .ThemeColor = xlThemeColorDark1
+            .TintAndShade = -0.499984740745262
+            .PatternTintAndShade = 0
+        End With
+        Set tRng = Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + maxCol - 1).AddressLocal)
+        tRng.Merge
+        WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    
+        tRow = tRow + 1:
+        i = 0
+    
+        WS.Cells(tRow, tcol + i).Value = "Franchise": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Project Name": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "ADDIE Stage": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Task": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Status": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Date Started": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Due Date": i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Notes": i = i + 1
+        
+        WS.Rows(tRow).Font.Bold = True
+        Call AddBorders(Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + i - 1).AddressLocal))
+        tRow = tRow + 1:
+skipHeaders:
+        i = 0
+
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(2).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(3).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(13).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(4).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(5).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(11).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(6).Text: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = LVW.ListItems(tLI).ListSubItems(13).Text: i = i + 1
+        
+        Call AddBorders(Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + i - 1).AddressLocal))
+        
+        tRow = tRow + 1
+skipData:
+    Next tLI
+    i = 0
+     'Formatting
+    PS.lblStatus.Caption = "Formatting Excel File": DoEvents
+    WS.Cells.VerticalAlignment = xlTop
+    WS.Columns(sCol + i).ColumnWidth = 18: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 40: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 18: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 40: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 14: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 12: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 40: i = i + 1
+
+    For i = 0 To maxCol - 1
+        WS.Columns(sCol + i).HorizontalAlignment = xlCenter
+    Next i
+
+    WS.Cells.WrapText = True
+
+    Call SetPageHeaders(WS, True, "")
+    GoTo Done
+err1:
+    MsgBox "An Error Occured, Please press the 'Update References' button and try again"
+Done:
+    Unload PS
+    Application.ScreenUpdating = True
+
+End Sub
+
+Sub GenDashBoard()
+    Dim WS As Worksheet, PS As New frmProgramStatus, tWS As Worksheet, WB As Workbook
+    Dim CN As Object, RS As Object, maxCol As Integer, currRow As Integer
+    Dim tRow As Integer, tcol As Integer, sCol As Integer, i As Integer, tRng As Range
+    Dim tFranchiseID As String, RS_Franchise As Object, tProjID As String
+    Dim ColNames As Collection, colVals As Collection, totProjects As Integer, CompProjects As Integer
+    Dim OpenProjects As Integer, NSProjects As Integer, FirstRec As Boolean
+    Dim ProjNames As String, strComma As String, tFranRow As Integer
+    
+    maxCol = 6
+    'On Error GoTo err1
+    PS.Show
+    PS.lblStatus.Caption = "Connecting"
+    Application.ScreenUpdating = False
+    sCol = 1
+    Set CN = getConnection
+    '***********************Load Data in New Excel Sheet*********************************
+    PS.lblStatus.Caption = "Creating Excel File": DoEvents
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = WB.Worksheets(1)
+    WS.Name = "Dashboard"
+        
+    'Project Header Data
+    tRow = 1: tcol = sCol: i = 0
+    WS.Cells(tRow, tcol).Value = "Franchise": i = i + 1
+    WS.Cells(tRow, tcol + i).Value = "Total Courses": i = i + 1
+    WS.Cells(tRow, tcol + i).Value = "# Completed Courses": i = i + 1
+    WS.Cells(tRow, tcol + i).Value = "Open Course": i = i + 1
+    WS.Cells(tRow, tcol + i).Value = "% Complete": i = i + 1
+    WS.Cells(tRow, tcol + i).Value = "Monthly Update": i = i + 1
+    Set tRng = Range(WS.Cells(tRow, tcol).AddressLocal & ":" & WS.Cells(tRow, tcol + i - 1).AddressLocal)
+    tRng.Font.Bold = True
+    tRng.HorizontalAlignment = xlCenter
+    tRng.Interior.Color = RGB(79, 129, 189)
+    tRng.Font.Color = RGB(255, 255, 255)
+    Call AddBorders(tRng)
+    PS.lblStatus.Caption = "Populating Excel File": DoEvents
+    Set RS_Franchise = LoadTableData(CN, "tblFranchise")
+    While Not RS_Franchise.EOF
+        i = 0
+        tRow = tRow + 1
+        currRow = tRow
+        tFranchiseID = RS_Franchise("FranchiseID").Value
+        WS.Cells(tRow, tcol + i).Value = RS_Franchise("FranchiseName").Value: i = i + 1
+        PS.lblStatus.Caption = "Populating Excel File: " & RS_Franchise("FranchiseName").Value: DoEvents
+        'Get Total Projects
+        totProjects = 0
+        Set ColNames = New Collection
+        Set colVals = New Collection
+        ColNames.Add "FranchiseID"
+        colVals.Add """" & tFranchiseID & """"
+        Set RS = LoadTableData_Filtered(CN, "qryTotProjects_ByFranchise", ColNames, colVals)
+        If Not RS.EOF Then totProjects = RS(0).Value
+        RS.Close
+        WS.Cells(tRow, tcol + i).Value = totProjects: i = i + 1
+        
+        'Get Total projects not started
+        NSProjects = 0
+        'Set ColNames = New Collection
+        'Set ColVals = New Collection
+        'ColNames.Add "FranchiseID"
+        'ColVals.Add tFranchiseID
+        Set RS = LoadTableData_Filtered(CN, "qryListOfProjectsNotStarted", ColNames, colVals)
+        While Not RS.EOF
+            NSProjects = NSProjects + 1
+            RS.MoveNext
+        Wend
+        RS.Close
+        
+        'Get Total Open Projects
+        OpenProjects = 0
+        'Set ColNames = New Collection
+        'Set ColVals = New Collection
+        'ColNames.Add "FranchiseID"
+        'ColVals.Add tFranchiseID
+        Set RS = LoadTableData_Filtered(CN, "qryListofOpenProj_ByFranchise", ColNames, colVals)
+        While Not RS.EOF
+            OpenProjects = OpenProjects + 1
+            RS.MoveNext
+        Wend
+        
+        'Get Completed Projects
+        CompProjects = totProjects - OpenProjects - NSProjects
+        WS.Cells(tRow, tcol + i).Value = CompProjects: i = i + 1
+        WS.Cells(tRow, tcol + i).Value = "Total Open: " & OpenProjects
+        WS.Cells(tRow, tcol + i).Font.Bold = True: i = i + 1
+        tFranRow = tRow
+        If OpenProjects > 0 Then
+            tRow = tRow + 1
+            RS.MoveFirst
+            FirstRec = True
+            Set tWS = ActiveWorkbook.Worksheets.Add(After:=WB.Worksheets(WB.Worksheets.Count))
+            tWS.Name = CheckName(RS_Franchise("FranchiseName").Value)
+            
+            ProjNames = ""
+            strComma = ""
+            While Not RS.EOF
+                If Not FirstRec Then tRow = tRow + 1
+                tProjID = RS("ID").Value
+                WS.Cells(tRow, tcol + i - 1).Value = RS("Project Name").Value
+                Call ExportProject(tProjID, tWS)
+                WS.Cells(tRow, tcol + i).FormulaR1C1 = "=" & tProjID
+                WS.Cells(tRow, tcol + i).Style = "Percent"
+                ProjNames = ProjNames & strComma & tProjID
+                strComma = ","
+                RS.MoveNext
+                FirstRec = False
+            Wend
+            WS.Cells(tFranRow, tcol + i).FormulaR1C1 = "=AVERAGE(" & ProjNames & ")"
+            WS.Cells(tFranRow, tcol + i).Style = "Percent"
+            WS.Rows(tFranRow + 1 & ":" & tRow).Group
+        ElseIf CompProjects > 0 Then
+            WS.Cells(tFranRow, tcol + i + 1).Value = 1
+            WS.Cells(tFranRow, tcol + i).Style = "Percent"
+        ElseIf CompProjects = 0 Then WS.Cells(tFranRow, tcol + i).Value = "N/A"
+        End If
+        WS.Activate
+        Set tRng = Range(WS.Cells(currRow, tcol).AddressLocal & ":" & WS.Cells(tRow, maxCol).AddressLocal)
+        Call AddBorders(tRng)
+        
+        RS.Close
+        RS_Franchise.MoveNext
+    Wend
+ 
+    i = 0
+     'Formatting
+    PS.lblStatus.Caption = "Formatting Excel File": DoEvents
+    WS.Cells.VerticalAlignment = xlTop
+    WS.Columns(sCol + i).ColumnWidth = 25: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 13: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 13: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 40: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 10: i = i + 1
+    WS.Columns(sCol + i).ColumnWidth = 30: i = i + 1
+    WS.Outline.ShowLevels RowLevels:=1
+    WS.Outline.SummaryRow = xlAbove
+
+
+    For i = 0 To maxCol - 1
+        WS.Columns(sCol + i).HorizontalAlignment = xlCenter
+    Next i
+
+    WS.Cells.WrapText = True
+    Set RS = Nothing
+
+    Call SetPageHeaders(WS, True, "")
+    WS.Activate
+    GoTo Done
+err1:
+    MsgBox "An Error Occured, Please press the 'Update References' button and try again"
+Done:
+    Unload PS
+    Application.ScreenUpdating = True
+
+
+End Sub
+
+Sub ExportLstView(LVW As ListView)
+    Dim maxCol As Integer, tLI As Integer, tPeopleID As Integer
+    Dim tRow As Integer, tcol As Integer, sCol As Integer, i As Integer, tRng As Range
+    Dim tCLI As Integer, WS As Worksheet, tWSCol As Integer, WB As Workbook
+    
+    'On Error GoTo err1
+    Application.ScreenUpdating = False
+    sCol = 1
+    
+    'Get User Task Data
+    If LVW.ListItems.Count = 0 Then
+        MsgBox "No list items found"
+        GoTo Done
+    End If
+    '***********************Load Data in New Excel Sheet*********************************
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = ActiveWorkbook.Worksheets(1)
+        
+    'Project Header Data
+    tRow = 1: tWSCol = sCol
+    For tcol = 1 To LVW.ColumnHeaders.Count
+        tCLI = GetNextCol(LVW, tcol - 1)
+        If LVW.ColumnHeaders(tCLI).Width = 0 Then GoTo skipCol
+        WS.Cells(tRow, tWSCol).Value = LVW.ColumnHeaders(tCLI).Text
+        WS.Cells(tRow, tWSCol).Font.Bold = True
+        WS.Columns(tWSCol).ColumnWidth = LVW.ColumnHeaders(tCLI).Width / COLCELLWIDTHRATIO
+        maxCol = tWSCol
+        tWSCol = tWSCol + 1
+skipCol:
+    Next tcol
+    tRow = tRow + 1
+    '****************Populate Data from Listview *******************************************
+    For tLI = 1 To LVW.ListItems.Count
+        tCLI = 0
+        tWSCol = sCol
+        For tcol = 1 To LVW.ColumnHeaders.Count
+            tCLI = GetNextCol(LVW, tcol - 1)
+            If LVW.ColumnHeaders(tCLI).Width = 0 Then GoTo skipCol2
+            If tCLI = 1 Then
+                WS.Cells(tRow, tWSCol).Value = LVW.ListItems(tLI).Text
+            Else
+                WS.Cells(tRow, tWSCol).Value = LVW.ListItems(tLI).ListSubItems(tCLI - 1)
+            End If
+            tWSCol = tWSCol + 1
+skipCol2:
+        Next tcol
+        tRow = tRow + 1
+    Next tLI
+    i = 0
+     'Formatting
+    WS.Cells.VerticalAlignment = xlTop
+    
+
+
+    For i = 0 To maxCol - 1
+        WS.Columns(sCol + i).HorizontalAlignment = xlCenter
+    Next i
+
+    WS.Cells.WrapText = True
+
+    Call SetPageHeaders(WS, True, "")
+    GoTo Done
+err1:
+    MsgBox "An Error Occured, Please press the 'Update References' button and try again"
+Done:
+    Application.ScreenUpdating = True
+
+End Sub
+
+Sub RecentProjectUpdates(SDate As Date, EDate As Date, Optional Filter_Proj As Collection, Optional Filter_Franchise As Collection, Optional Filter_Region As Collection)
+    Dim CN As Object, RS As Object, ViewName As String
+    Dim WB As Workbook, WS As Worksheet, tRow As Integer, tcol As Integer, sCol As Integer, maxCol As Integer
+    Dim DateFltr As String
+    Dim DHRow As Integer, tRng As Range
+    Dim tUser As String, tUN As String, tDate As String, tActType As String, tCourseNum As String, tProjName As String
+    Dim tFranchise As String, tStage As String, tRegion As String, tTask As String
+    
+    Dim PS As New frmProgramStatus
+    
+    Application.ScreenUpdating = False
+    PS.Show
+    PS.lblStatus.Caption = "Generating Workbook"
+    DoEvents
+    
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = WB.Worksheets(1)
+    tRow = 1: sCol = 1: maxCol = 9
+    tcol = sCol
+    WS.Cells(tRow, sCol).Value = "Project Activity Report"
+    WS.Cells(tRow, sCol).Font.Bold = True
+    WS.Cells(tRow, sCol).Font.Underline = True
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    Set tRng = WS.Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, sCol + maxCol - 1).AddressLocal)
+    tRng.Merge
+    
+    tRow = tRow + 2
+    PS.lblStatus.Caption = "Formatting Workbook": DoEvents
+    
+    DHRow = tRow
+    WS.Columns(tcol).ColumnWidth = 15
+    WS.Cells(tRow, tcol).Value = "Region": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "Franchise": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 15
+    WS.Cells(tRow, tcol).Value = "Course #": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 40
+    WS.Cells(tRow, tcol).Value = "Project Name": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 12
+    WS.Cells(tRow, tcol).Value = "ADDIE Stage": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 40
+    WS.Cells(tRow, tcol).Value = "Task": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 12
+    WS.Cells(tRow, tcol).Value = "Date": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "User": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 30
+    WS.Cells(tRow, tcol).Value = "Activity": tcol = tcol + 1
+    
+    WS.Rows(tRow).Font.Bold = True
+    Set tRng = WS.Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, sCol + maxCol - 1).AddressLocal)
+    Call AddBorders(tRng)
+    tRow = tRow + 1
+    tcol = sCol
+    
+    'Qry ViewName, filter by date
+    'Project Header Data************************************************************
+    PS.lblStatus.Caption = "Gathering Project Header Data": DoEvents
+    ViewName = "qryUserActivity_Project"
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([Project Creation Date] >= #" & SDate & "#) AND ([Project Creation Date] <= #" & EDate & "#))"
+    DateFltr = DateFltr & " OR "
+    DateFltr = DateFltr & " (([Project Modification Date] >= #" & SDate & "#) AND ([Project Modification Date] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Project Header Data into Excel": DoEvents
+    While Not RS.EOF
+        'Project Creation
+        tcol = sCol
+        If IsNull(RS("Created Project UserName").Value) Then GoTo skipProjCreation
+        tRegion = RS("Region").Value
+        If Filter_Region.Count > 0 Then
+            If Not IsInCollection(tRegion, Filter_Region) Then GoTo skipProjCreation
+        End If
+        tCourseNum = RS("Course Number").Value
+        If Filter_Proj.Count > 0 Then
+            If Not IsInCollection(tCourseNum, Filter_Proj) Then GoTo skipProjCreation
+        End If
+        tFranchise = RS("FranchiseName").Value
+        If Filter_Franchise.Count > 0 Then
+            If Not IsInCollection(tFranchise, Filter_Franchise) Then GoTo skipProjCreation
+        End If
+        tUN = RS("Created Project UserName").Value
+        tDate = RS("Project Creation Date").Value
+        tDate = Format(tDate, "MM/DD/YYYY")
+        tUser = IIf(IsNull(RS("Created Project Name").Value), tUN, RS("Created Project Name").Value)
+        tActType = "Added Project"
+        tProjName = RS("Project Name").Value
+        tStage = "N/A"
+        tTask = "Project Header"
+        WS.Cells(tRow, tcol).Value = tRegion: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tFranchise: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tStage: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tTask: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipProjCreation:
+        'Project Modification
+        tcol = sCol
+        If IsNull(RS("Modified Project UserName").Value) Then GoTo skipProjModification
+        tRegion = RS("Region").Value
+        If Filter_Region.Count > 0 Then
+            If Not IsInCollection(tRegion, Filter_Region) Then GoTo skipProjModification
+        End If
+        tCourseNum = RS("Course Number").Value
+        If Filter_Proj.Count > 0 Then
+            If Not IsInCollection(tCourseNum, Filter_Proj) Then GoTo skipProjModification
+        End If
+        tFranchise = RS("FranchiseName").Value
+        If Filter_Franchise.Count > 0 Then
+            If Not IsInCollection(tFranchise, Filter_Franchise) Then GoTo skipProjModification
+        End If
+        tUN = RS("Modified Project UserName").Value
+        tDate = RS("Project Modification Date").Value
+        tDate = Format(tDate, "MM/DD/YYYY")
+        tUser = IIf(IsNull(RS("Modified Project Name").Value), tUN, RS("Modified Project Name").Value)
+        tActType = "Project Header Modified"
+        tProjName = RS("Project Name").Value
+        tStage = "N/A"
+        tTask = "Project Header"
+        WS.Cells(tRow, tcol).Value = tRegion: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tFranchise: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tStage: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tTask: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        tRow = tRow + 1
+skipProjModification:
+        RS.MoveNext
+    Wend
+    
+    'Project Tasks Data************************************************************
+    PS.lblStatus.Caption = "Gathering Project Tasks Data": DoEvents
+    ViewName = "qryUserActivity_ProjData"
+
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([DateCreated] >= #" & SDate & "#) AND ([DateCreated] <= #" & EDate & "#))"
+    DateFltr = DateFltr & " OR "
+    DateFltr = DateFltr & " (([DateModified] >= #" & SDate & "#) AND ([DateModified] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Project Tasks Data into Excel"
+    While Not RS.EOF
+        'Task Creation
+        tcol = sCol
+        If IsNull(RS("Created Task UserName").Value) Then GoTo skipTaskCreation
+        tRegion = RS("Region").Value
+        If Filter_Region.Count > 0 Then
+            If Not IsInCollection(tRegion, Filter_Region) Then GoTo skipTaskCreation
+        End If
+        tCourseNum = RS("Course Number").Value
+        If Filter_Proj.Count > 0 Then
+            If Not IsInCollection(tCourseNum, Filter_Proj) Then GoTo skipTaskCreation
+        End If
+        tFranchise = RS("FranchiseName").Value
+        If Filter_Franchise.Count > 0 Then
+            If Not IsInCollection(tFranchise, Filter_Franchise) Then GoTo skipTaskCreation
+        End If
+        tUN = RS("Created Task UserName").Value
+        tDate = RS("DateCreated").Value
+        tDate = Format(tDate, "MM/DD/YYYY")
+        tUser = IIf(IsNull(RS("Created Task Name").Value), tUN, RS("Created Task Name").Value)
+        tActType = "Added Task"
+        tProjName = RS("Project Name").Value
+        tStage = RS("Description").Value
+        tTask = RS("Name of Stage").Value
+        WS.Cells(tRow, tcol).Value = tRegion: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tFranchise: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tStage: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tTask: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipTaskCreation:
+        'Task Modification
+        tcol = sCol
+        If IsNull(RS("Modified Task UserName").Value) Then GoTo skipTaskModification
+        tRegion = RS("Region").Value
+        If Filter_Region.Count > 0 Then
+            If Not IsInCollection(tRegion, Filter_Region) Then GoTo skipTaskModification
+        End If
+        tCourseNum = RS("Course Number").Value
+        If Filter_Proj.Count > 0 Then
+            If Not IsInCollection(tCourseNum, Filter_Proj) Then GoTo skipTaskModification
+        End If
+        tFranchise = RS("FranchiseName").Value
+        If Filter_Franchise.Count > 0 Then
+            If Not IsInCollection(tFranchise, Filter_Franchise) Then GoTo skipTaskModification
+        End If
+        tUN = RS("Modified Task UserName").Value
+        tDate = IIf(IsNull(RS("DateCreated").Value), "", RS("DateCreated").Value)
+        tDate = Format(tDate, "MM/DD/YYYY")
+        tUser = IIf(IsNull(RS("Modified Task Name").Value), tUN, RS("Modified Task Name").Value)
+        tActType = "Modified Task"
+        tProjName = RS("Project Name").Value
+        tStage = RS("Description").Value
+        tTask = RS("Name of Stage").Value
+        WS.Cells(tRow, tcol).Value = tRegion: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tFranchise: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tStage: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tTask: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        tRow = tRow + 1
+skipTaskModification:
+        RS.MoveNext
+    Wend
+    
+    'Assigning People to Tasks Data************************************************************
+    PS.lblStatus.Caption = "Gathering Responsible People Data": DoEvents
+    ViewName = "qryUserActivity_RespPeople"
+
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([DateCreated] >= #" & SDate & "#) AND ([DateCreated] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Responsible People Data into Excel": DoEvents
+    While Not RS.EOF
+        'Responsible People Creation
+        tcol = sCol
+        If IsNull(RS("xRef Created By UserName").Value) Then GoTo skipRespCreation
+        tRegion = RS("Region").Value
+        If Filter_Region.Count > 0 Then
+            If Not IsInCollection(tRegion, Filter_Region) Then GoTo skipRespCreation
+        End If
+        tCourseNum = RS("Course Number").Value
+        If Filter_Proj.Count > 0 Then
+            If Not IsInCollection(tCourseNum, Filter_Proj) Then GoTo skipRespCreation
+        End If
+        tFranchise = RS("FranchiseName").Value
+        If Filter_Franchise.Count > 0 Then
+            If Not IsInCollection(tFranchise, Filter_Franchise) Then GoTo skipRespCreation
+        End If
+        tUN = RS("xRef Created By UserName").Value
+        tDate = RS("DateCreated").Value
+        tDate = Format(tDate, "MM/DD/YYYY")
+        tUser = IIf(IsNull(RS("xRef Created By Name").Value), tUN, RS("xRef Created By Name").Value)
+        tActType = "Assigned " & RS("Name").Value
+        tProjName = RS("Project Name").Value
+        tStage = RS("Description").Value
+        tTask = RS("Name of Stage").Value
+        WS.Cells(tRow, tcol).Value = tRegion: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tFranchise: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tStage: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tTask: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipRespCreation:
+        RS.MoveNext
+    Wend
+    
+    PS.lblStatus.Caption = "Formatting Report...": DoEvents
+    WS.Columns("A:C").HorizontalAlignment = xlCenter
+    Set tRng = WS.Range(WS.Cells(DHRow + 1, sCol).AddressLocal & ":" & WS.Cells(tRow - 1, sCol + maxCol - 1).AddressLocal)
+    WS.Sort.SortFields.Clear
+    WS.Sort.SortFields.Add Key:=Range("G" & DHRow + 1 & ":G" & tRow - 1) _
+        , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+    WS.Sort.SortFields.Add Key:=Range("C" & DHRow + 1 & ":C" & tRow - 1) _
+        , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+    With WS.Sort
+        .SetRange Range(tRng.AddressLocal)
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    WS.Cells.WrapText = True
+    WS.Cells.HorizontalAlignment = xlCenter
+    WS.Cells.VerticalAlignment = xlTop
+    Set tRng = WS.Range(WS.Cells(DHRow, sCol).AddressLocal & ":" & WS.Cells(tRow - 1, sCol + maxCol - 1).AddressLocal)
+    tRng.AutoFilter
+    Call AddBorders(tRng)
+    Call SetPageHeaders(WS, True, "")
+Done:
+    PS.Hide
+    Application.ScreenUpdating = True
+End Sub
+
+Sub UserActivity(SDate As Date, EDate As Date, UserNames As Collection)
+    Dim CN As Object, RS As Object, ViewName As String
+    Dim WB As Workbook, WS As Worksheet, tRow As Integer, tcol As Integer, sCol As Integer
+    Dim DateFltr As String
+    Dim DHRow As Integer, tRng As Range, maxCol As Integer
+    Dim tUser As String, tUN As String, tDate As String, tActType As String, tCourseNum As String, tProjName As String
+    
+    Dim PS As New frmProgramStatus
+    
+    Application.ScreenUpdating = False
+    PS.Show
+    PS.lblStatus.Caption = "Generating Workbook"
+    DoEvents
+    
+    Set WB = Workbooks.Add
+    Call RemoveExtraWS(WB)
+    Set WS = WB.Worksheets(1)
+    tRow = 1: sCol = 1
+    tcol = sCol
+    maxCol = 5
+    WS.Cells(tRow, sCol).Value = "User Activity Report"
+    WS.Cells(tRow, sCol).Font.Bold = True
+    WS.Cells(tRow, sCol).Font.Underline = True
+    WS.Cells(tRow, tcol).HorizontalAlignment = xlCenter
+    Set tRng = WS.Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, sCol + maxCol).AddressLocal)
+    tRng.Merge
+    
+    tRow = tRow + 2
+    PS.lblStatus.Caption = "Formatting Workbook": DoEvents
+    
+    DHRow = tRow
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "Date": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "User": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "UserName": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 70
+    WS.Cells(tRow, tcol).Value = "Activity Type": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 16
+    WS.Cells(tRow, tcol).Value = "Course Number": tcol = tcol + 1
+    WS.Columns(tcol).ColumnWidth = 45
+    WS.Cells(tRow, tcol).Value = "Project Name": tcol = tcol + 1
+    WS.Rows(tRow).Font.Bold = True
+    Set tRng = WS.Range(WS.Cells(tRow, sCol).AddressLocal & ":" & WS.Cells(tRow, sCol + maxCol).AddressLocal)
+    Call AddBorders(tRng)
+    tRow = tRow + 1
+    tcol = sCol
+    
+    'Qry ViewName, filter by date
+    'Project Header Data************************************************************
+    PS.lblStatus.Caption = "Gathering Project Header Data": DoEvents
+    ViewName = "qryUserActivity_Project"
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([Project Creation Date] >= #" & SDate & "#) AND ([Project Creation Date] <= #" & EDate & "#))"
+    DateFltr = DateFltr & " OR "
+    DateFltr = DateFltr & " (([Project Modification Date] >= #" & SDate & "#) AND ([Project Modification Date] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Project Header Data into Excel": DoEvents
+    While Not RS.EOF
+        'Project Creation
+        tUN = "": tDate = "": tUser = "": tActType = "": tCourseNum = "": tProjName = ""
+        
+        tcol = sCol
+        If IsNull(RS("Created Project UserName").Value) Then GoTo skipProjCreation
+        tUN = RS("Created Project UserName").Value
+        If UserNames.Count > 0 Then
+            If Not IsInCollection(tUN, UserNames) Then GoTo skipProjCreation
+        End If
+        tDate = RS("Project Creation Date").Value
+        tUser = RS("Created Project Name").Value
+        tActType = "Added Project"
+        tCourseNum = RS("Course Number").Value
+        tProjName = RS("Project Name").Value
+        
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUN: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipProjCreation:
+        'Project Modification
+        tcol = sCol
+        If Not IsNull(RS("Modified Project UserName").Value) Then tUN = RS("Modified Project UserName").Value
+        If UserNames.Count > 0 Then
+            If Not IsInCollection(tUN, UserNames) Then GoTo skipProjModification
+        End If
+        If Not IsNull(RS("Project Modification Date").Value) Then tDate = RS("Project Modification Date").Value
+        tUser = RS("Modified Project Name").Value
+        tActType = "Modified Project Header"
+        tCourseNum = RS("Course Number").Value
+        tProjName = RS("Project Name").Value
+        
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUN: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        tRow = tRow + 1
+skipProjModification:
+        RS.MoveNext
+    Wend
+    
+    'Project Tasks Data************************************************************
+    PS.lblStatus.Caption = "Gathering Project Tasks Data": DoEvents
+    ViewName = "qryUserActivity_ProjData"
+
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([DateCreated] >= #" & SDate & "#) AND ([DateCreated] <= #" & EDate & "#))"
+    DateFltr = DateFltr & " OR "
+    DateFltr = DateFltr & " (([DateModified] >= #" & SDate & "#) AND ([DateModified] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Project Tasks Data into Excel"
+    While Not RS.EOF
+        'Task Creation
+        tcol = sCol
+        If IsNull(RS("Created Task UserName").Value) Then GoTo skipTaskCreation
+        tUN = RS("Created Task UserName").Value
+        If UserNames.Count > 0 Then
+            If Not IsInCollection(tUN, UserNames) Then GoTo skipTaskCreation
+        End If
+        tDate = RS("DateCreated").Value
+        tUser = RS("Created Task Name").Value
+        tActType = "Added ADDIE (" & RS("Description").Value & ") Task: " & RS("Name of Stage").Value
+        tCourseNum = RS("Course Number").Value
+        tProjName = RS("Project Name").Value
+        
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUN: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipTaskCreation:
+        'Task Modification
+        tcol = sCol
+        If IsNull(RS("Modified Task UserName").Value) Then GoTo skipTaskModification
+        tUN = RS("Modified Task UserName").Value
+        If UserNames.Count > 0 Then
+            If Not IsInCollection(tUN, UserNames) Then GoTo skipTaskModification
+        End If
+        tDate = RS("DateModified").Value
+        tUser = RS("Modified Task Name").Value
+        tActType = "Modified ADDIE (" & RS("Description").Value & ") Task: " & RS("Name of Stage").Value
+        tCourseNum = RS("Course Number").Value
+        tProjName = RS("Project Name").Value
+        
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUN: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        tRow = tRow + 1
+skipTaskModification:
+        RS.MoveNext
+    Wend
+    
+    'Assigning People to Tasks Data************************************************************
+    PS.lblStatus.Caption = "Gathering Responsible People Data": DoEvents
+    ViewName = "qryUserActivity_RespPeople"
+
+    DateFltr = " WHERE ("
+    DateFltr = DateFltr & "(([DateCreated] >= #" & SDate & "#) AND ([DateCreated] <= #" & EDate & "#))"
+    DateFltr = DateFltr & ")"
+    
+    Set CN = getConnection
+    Set RS = LoadTableData_Filtered_CustomWhere(CN, ViewName, DateFltr)
+    PS.lblStatus.Caption = "Loading Responsible People Data into Excel": DoEvents
+    While Not RS.EOF
+        'Responsible People Creation
+        tcol = sCol
+        If IsNull(RS("xRef Created By UserName").Value) Then GoTo skipProjCreation
+        tUN = RS("xRef Created By UserName").Value
+        If UserNames.Count > 0 Then
+            If Not IsInCollection(tUN, UserNames) Then GoTo skipRespCreation
+        End If
+        tDate = RS("DateCreated").Value
+        tUser = RS("xRef Created By Name").Value
+        tActType = "Assigned " & RS("Name").Value & " to " & RS("Description").Value & " Task: " & RS("Name of Stage").Value
+        tCourseNum = RS("Course Number").Value
+        tProjName = RS("Project Name").Value
+        
+        WS.Cells(tRow, tcol).Value = tDate: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUser: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tUN: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tActType: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tCourseNum: tcol = tcol + 1
+        WS.Cells(tRow, tcol).Value = tProjName: tcol = tcol + 1
+        tRow = tRow + 1
+        
+skipRespCreation:
+        RS.MoveNext
+    Wend
+    
+    PS.lblStatus.Caption = "Formatting Report...": DoEvents
+    WS.Columns("A:C").HorizontalAlignment = xlCenter
+    Set tRng = WS.Range(WS.Cells(DHRow + 1, sCol).AddressLocal & ":" & WS.Cells(tRow - 1, sCol + maxCol).AddressLocal)
+    WS.Sort.SortFields.Clear
+    WS.Sort.SortFields.Add Key:=Range("B" & DHRow + 1 & ":B" & tRow - 1) _
+        , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+    WS.Sort.SortFields.Add Key:=Range("A" & DHRow + 1 & ":A" & tRow - 1) _
+        , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+    WS.Sort.SortFields.Add Key:=Range("E" & DHRow + 1 & ":E" & tRow - 1) _
+        , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
+    With WS.Sort
+        .SetRange Range(tRng.AddressLocal)
+        .Header = xlYes
+        .MatchCase = False
+        .Orientation = xlTopToBottom
+        .SortMethod = xlPinYin
+        .Apply
+    End With
+    WS.Cells.WrapText = True
+    Set tRng = WS.Range(WS.Cells(DHRow, sCol).AddressLocal & ":" & WS.Cells(tRow - 1, sCol + maxCol).AddressLocal)
+    tRng.AutoFilter
+    Call AddBorders(tRng)
+    Call SetPageHeaders(WS, True, "")
+    
+Done:
+    PS.Hide
+    Application.ScreenUpdating = True
+    
+End Sub
+
+Function IsInCollection(ValToCheck, Coll As Collection)
+    Dim i As Integer
+    IsInCollection = False
+    For i = 1 To Coll.Count
+        If """" & ValToCheck & """" = Coll.Item(i) Or ValToCheck = Coll.Item(i) Then
+            IsInCollection = True
+            Exit Function
+        End If
+    Next i
+End Function
+
+Sub AddBorders(Rng As Range)
+    Rng.Borders(xlEdgeLeft).LineStyle = xlContinuous
+    Rng.Borders(xlEdgeTop).LineStyle = xlContinuous
+    Rng.Borders(xlEdgeBottom).LineStyle = xlContinuous
+    Rng.Borders(xlEdgeRight).LineStyle = xlContinuous
+    Rng.Borders(xlInsideVertical).LineStyle = xlContinuous
+    Rng.Borders(xlInsideHorizontal).LineStyle = xlContinuous
+End Sub
+
+Sub SetPageHeaders(ByRef WS As Worksheet, UseLandscape As Boolean, LeftHeader As String)
+    Application.PrintCommunication = False
+    With WS.PageSetup
+        If UseLandscape Then
+            .Orientation = xlLandscape
+        Else
+            .Orientation = xlPortrait
+        End If
+        .FitToPagesWide = 1
+        .FitToPagesTall = 0
+        If LeftHeader <> "" Then .LeftHeader = LeftHeader
+        .RightHeaderPicture.Filename = DBPATH & SMLOGONAME
+        .LeftFooter = "© Smiths Medical: Proprietary Data"
+        .CenterFooter = "-INTERNAL-"
+    End With
+    Application.PrintCommunication = True
+    Application.PrintCommunication = False
+        WS.PageSetup.RightHeader = "&G"
+        WS.PageSetup.RightFooter = "&P of &N"
+    Application.PrintCommunication = True
+End Sub
+
+Function GetNextCol(LVW As ListView, currPos As Integer) As Integer
+    Dim i As Integer
+    For i = 1 To LVW.ColumnHeaders.Count
+        If LVW.ColumnHeaders(i).Position = currPos + 1 Then
+            GetNextCol = i
+            Exit Function
+        End If
+    Next i
+    GetNextCol = -1
+End Function
+
+Sub RemoveExtraWS(ByRef WB As Workbook)
+    Dim WS As Worksheet
+    Application.DisplayAlerts = False
+    For Each WS In WB.Worksheets
+        If WB.Worksheets.Count = 1 Then Exit For
+        If WS.Name = "Sheet1" Then GoTo skipWS
+        WS.Delete
+skipWS:
+    Next WS
+    Application.DisplayAlerts = True
+End Sub
+
+//**************************************MdlThisWB******************************************************
+Option Explicit
+
+Sub EnableButtons()
+    Dim tObj As Object
+    For Each tObj In Sheet6.OLEObjects
+        If Left(tObj.Name, 3) = "btn" Then tObj.Enabled = True
+    Next tObj
+    Sheet6.lblInvalidConnection.Visible = False
+    Call ShowMaintenance
+End Sub
+
+Sub DisableButtons()
+    Dim tObj As Object
+    For Each tObj In Sheet6.OLEObjects
+        If Left(tObj.Name, 3) = "btn" Then tObj.Enabled = False
+        If tObj.Name = "btnFixConnections" Or tObj.Name = "btnUpdateReferences" Then tObj.Enabled = True
+        If tObj.Name = "btnMapDrives" Then tObj.Enabled = True
+        If tObj.Name = "btnCloseProgram" Then tObj.Enabled = True
+    Next tObj
+End Sub
+
+Sub ResetMenu()
+    Dim OkToShow As Boolean
+    
+    ThisWorkbook.Activate
+    'Hide all buttons associated with admin privileges or above
+    OkToShow = False
+    Sheet6.btnMaintenanceMenu.Visible = OkToShow
+    Sheet6.btnShowDevMenu.Visible = OkToShow
+    Sheet6.btnShowSalesMenu.Visible = OkToShow
+End Sub
+
+Sub ShowMaintenance()
+    Dim OkToShow As Boolean
+    
+    ThisWorkbook.Activate
+    'Verify authorization and show maintenance menu button
+    OkToShow = False
+    If AccessIsGranted("Admin") Then OkToShow = True
+    Sheet6.btnMaintenanceMenu.Visible = OkToShow
+    
+    'Hide additional buttons if authorization is false
+    If Not OkToShow Then Call ShowSales
+    
+    'Verify authorization and show developer Menu button
+    OkToShow = False
+    If DeveloperStatus Then OkToShow = True
+    Sheet6.btnShowDevMenu.Visible = OkToShow
+End Sub
+
+Sub ShowSales(Optional showOverride As Boolean)
+    Dim tObj As Object, showBool As Boolean
+    showBool = False
+    If DeveloperStatus Or showOverride Then showBool = True
+    Sheet6.btnShowSalesMenu.Visible = showBool
+End Sub
+
+Sub FormatSheetDisplay()
+    Sheet6.Activate
+    ActiveWindow.DisplayGridlines = False
+    ActiveWindow.DisplayHeadings = False
+End Sub
+
+//**************************************MdlVersionInfo******************************************************
+
+Option Explicit
+
+Function GetDBVersion() As String
+    Dim tblName As String, dbVerRS As Object, Chk As String, CN As Object
+    
+    tblName = "tblVersion"
+    Set CN = getConnection
+    Set dbVerRS = LoadTableData(CN, tblName)
+    If Not dbVerRS.EOF Then GetDBVersion = CStr(dbVerRS(0).Value)
+    dbVerRS.Close
+    Set dbVerRS = Nothing
+    Set CN = Nothing
+    
+End Function
+
+Function CurrentVersion() As Boolean
+    Dim DBVer As String, ThisVer As String
+    DBVer = GetDBVersion
+    ThisVer = CStr(Range("Version").Value)
+    If CDate(DBVer) <= CDate(ThisVer) Then
+        CurrentVersion = True
+    Else
+        CurrentVersion = False
+    End If
+End Function
+
+Sub CheckForUpdates()
+    Dim uAns As String, CurrName As String, CurrPath As String, Check As String
+    If CurrentVersion Then Exit Sub
+    uAns = MsgBox("A new update is available, Update?", vbYesNo, "Update Available")
+    If uAns = vbNo Then Exit Sub
+    'Perform Update
+    CurrName = ThisWorkbook.Name
+    CurrPath = Left(ThisWorkbook.FullName, Len(ThisWorkbook.FullName) - Len(CurrName))
+    Call CreateOldVersion
+    Check = GetNewVersion(CurrName, CurrPath)
+    If Check <> "" Then
+        MsgBox Check
+        Exit Sub
+    End If
+    Workbooks.Open CurrPath & CurrName
+    MsgBox "Update Complete"
+    ThisWorkbook.Close False
+End Sub
+
+Sub CreateOldVersion()
+    Dim SSName As String, SSPath As String, Extn As String
+    
+    SSName = ThisWorkbook.Name
+    SSPath = Left(ThisWorkbook.FullName, Len(ThisWorkbook.FullName) - Len(SSName))
+    Extn = Right(SSName, Len(SSName) - Find(".", SSName))
+    Extn = "." & Extn
+    SSName = Left(SSName, Len(SSName) - Len(Extn)) & "_Prev" & Extn
+    SSPath = SSPath & "old"
+    If Dir(SSPath, vbDirectory) = vbNullString Then MkDir (SSPath)
+    Application.DisplayAlerts = False
+    ThisWorkbook.SaveAs SSPath & "\" & SSName
+    Application.DisplayAlerts = True
+End Sub
+
+Function GetNewVersion(DestWBName As String, DestWBPath As String) As String
+    Dim FSO As Object
+    
+    On Error GoTo err1
+    Set FSO = VBA.CreateObject("Scripting.FileSystemObject")
+    
+    'Copy this file from existing location to DB folder
+    FSO.CopyFile DBINSTALLPATH & DestWBName, DestWBPath & DestWBName, True
+    Exit Function
+err1:
+    GetNewVersion = Err.Description
+End Function

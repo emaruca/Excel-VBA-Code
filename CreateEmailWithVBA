@@ -1,0 +1,215 @@
+Enter file contents here
+
+Code to Create Email with Excel VBA
+
+Sheet 1
+
+Option Explicit
+
+Private Sub CommandButton1_Click()
+    Call SetUpEMailMsg
+End Sub
+
+Private Sub CommandButton2_Click()
+    Dim fd As Office.FileDialog
+
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+
+   With fd
+
+      .AllowMultiSelect = False
+
+      ' Set the title of the dialog box.
+      .Title = "Please select the file."
+
+      ' Clear out the current filters, and add our own.
+      .Filters.Clear
+
+      ' Show the dialog box. If the .Show method returns True, the
+      ' user picked at least one file. If the .Show method returns
+      ' False, the user clicked Cancel.
+      If .Show = True Then Range("B4").Value = .SelectedItems(1)      'replace txtFileName with your textbox
+
+   End With
+   
+   
+
+End Sub
+
+Private Sub CommandButton3_Click()
+MsgBox Application.ActiveWorkbook.FullName
+End Sub
+
+Private Sub CommandButton4_Click()
+    Dim m As New Outlook.Application, s As Object
+    
+    'Set Mail_Object = CreateObject("Outlook.Application")
+    Set s = m.CreateItem(0)
+    With s
+    
+    .Subject = Range("B2").Value
+    .To = Range("B1").Value
+    
+    .Body = "test"
+    .Display
+    '.send
+    End With
+
+End Sub
+
+
+
+//*************************Ref Sheet Code****************************************
+Private Sub btnShowRefs_Click()
+    Dim theRef As Variant, i As Integer
+    Dim tRow As Integer, tCol As Integer
+    
+    Set VBAEditor = Application.VBE
+    Set vbProj = ActiveWorkbook.VBProject
+
+    ActiveSheet.Cells.Clear
+    tRow = 3: tCol = 1
+    ActiveSheet.Cells(tRow, tCol).Value = "Notes"
+    ActiveSheet.Cells(tRow, tCol).Font.Bold = True
+    tRow = tRow + 1
+    ActiveSheet.Cells(tRow, tCol).Value = REFLIBNOTE
+    tRow = tRow + 2
+    ActiveSheet.Cells(tRow, tCol).Value = "Ref Name"
+    ActiveSheet.Rows(tRow).Font.Bold = True
+    ActiveSheet.Cells(tRow, tCol + 1).Value = "Description"
+    ActiveSheet.Cells(tRow, tCol + 2).Value = "File Path"
+    ActiveSheet.Cells(tRow, tCol + 3).Value = "GUID"
+    tRow = tRow + 1
+    
+    For i = ThisWorkbook.VBProject.References.Count To 1 Step -1
+        Set theRef = ThisWorkbook.VBProject.References.Item(i)
+        ActiveSheet.Cells(tRow, tCol).Value = theRef.Name
+        ActiveSheet.Cells(tRow, tCol + 1).Value = theRef.Description
+        ActiveSheet.Cells(tRow, tCol + 2).Value = theRef.FullPath
+        ActiveSheet.Cells(tRow, tCol + 3).Value = theRef.GUID
+        tRow = tRow + 1
+    Next i
+
+End Sub
+
+Private Sub btnUpdateReferences_Click()
+    Dim tStr As String
+    tStr = AddReferences
+    If tStr = "" Then
+        MsgBox "References Up to Date"
+    Else
+        MsgBox tStr
+    End If
+End Sub
+
+
+//**********************************MdlReferences*********************************************
+'To be used with ref worksheet
+Option Explicit
+Public Const REFLIBNOTE As String = "In Security settings, ensure that ""Trust Access To Visual Basic Project"" is checked"
+
+Function AddReferences() As String
+    Dim theRef As Variant, i As Integer, tStr As String
+    Dim tRow As Integer, tCol As Integer, WS As Worksheet
+    
+    tStr = CheckRefWS
+    If tStr <> "" Then
+        MsgBox tStr
+        Exit Function
+    End If
+    
+    Set WS = ThisWorkbook.Worksheets("ref")
+    tStr = RemoveBrokenRefs
+    If tStr <> "" Then Exit Function
+    tRow = Range("RefGUID").Row + 1: tCol = Range("RefGUID").Column
+    
+    Do
+        tStr = WS.Cells(tRow, tCol).Text
+        If tStr = "" Then Exit Do
+        On Error GoTo err1
+        ThisWorkbook.VBProject.References.AddFromGuid tStr, 1, 0
+        tRow = tRow + 1
+    Loop
+    
+    Exit Function
+err1:
+    Select Case Err.Number
+    Case Is = 32813
+         'Reference already in use.  No action necessary
+    Case Is = vbNullString
+         'Reference added without issue
+    Case Else
+         'An unknown error was encountered, so alert the user
+        AddReferences = "A problem was encountered trying to" & vbNewLine _
+        & "add or remove a reference in this file" & vbNewLine & "Please check the " _
+        & "references in your VBA project!" & vbNewLine & vbNewLine _
+        & "Note: " & REFLIBNOTE
+    End Select
+    Resume Next
+
+End Function
+    
+Function RemoveBrokenRefs() As String
+    Dim i As Integer, theRef As Variant
+    On Error GoTo err1
+    For i = ThisWorkbook.VBProject.References.Count To 1 Step -1
+        Set theRef = ThisWorkbook.VBProject.References.Item(i)
+        If theRef.IsBroken Then ThisWorkbook.VBProject.References.Remove theRef
+    Next i
+    Exit Function
+err1:
+    MsgBox "Note: Please do the following to continue: " & vbNewLine & REFLIBNOTE _
+    & vbNewLine & "File => Options => Trust Center => Trust Center Settings..."
+    RemoveBrokenRefs = Err.Description
+End Function
+
+Function CheckRefWS() As String
+    On Error GoTo err1
+    CheckRefWS = ThisWorkbook.Worksheets("ref").Cells(1, 1).Text
+    CheckRefWS = ""
+    Exit Function
+err1:
+    CheckRefWS = "ref Worksheet needed to perform this function"
+End Function
+
+Function TestReferences() As String
+    Dim X As Object, Chk As String
+    On Error GoTo err1
+    Set X = CreateObject("ADODB.Connection")
+    Set X = Nothing
+    Set X = CreateObject("Collection")
+    Set X = Nothing
+    Exit Function
+err1:
+    TestReferences = AddReferences
+End Function
+
+//*********************Module 1*********************************************
+Sub SetUpEMailMsg()
+
+    Dim OLF As Outlook.MAPIFolder, olMailItem As Outlook.MailItem
+    Dim ToContact As Outlook.Recipient
+    
+    Dim ToAdr As String, strSubject As String, Body As String, strAttachment As String
+    
+    ToAdr = Range("B1").Value
+    strSubject = Range("B2").Value
+    Body = Range("B3").Value
+    strAttachment = Range("B4").Value
+    
+    
+    Set OLF = GetObject("", "Outlook.Application").GetNamespace("MAPI").GetDefaultFolder(olFolderInbox)
+    Set olMailItem = OLF.Items.Add ' creates a new e-mail message
+    With olMailItem
+        .Subject = strSubject
+        Set ToContact = .Recipients.Add(ToAdr) ' add a recipient
+        .Body = Body
+        If strAttachment <> "" Then .Attachments.Add strAttachment, olByValue, , "Attachment" ' insert attachment
+        '.ReadReceiptRequested = True ' read confirmation
+        .Display
+        '.Send ' sends the e-mail message (puts it in the Outbox)
+    End With
+    Set ToContact = Nothing
+    Set olMailItem = Nothing
+    Set OLF = Nothing
+End Sub
